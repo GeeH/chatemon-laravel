@@ -28,7 +28,7 @@ class SyncController extends Controller
         $document = $client->sync->v1->services($syncSid)
             ->documents
             ->create(['data' => $this->makeCombat($logger)->toArray()]);
-        
+
         dd($document->data);
     }
 }
