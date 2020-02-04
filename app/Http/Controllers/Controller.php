@@ -41,7 +41,7 @@ abstract class Controller extends BaseController
         );
     }
 
-    public function getCombat(): array
+    public function getCombat(LoggerInterface $logger): Combat
     {
         $accountId = getenv('TWILIO_SID');
         $authToken = getenv('TWILIO_ACCOUNT_TOKEN');
@@ -52,6 +52,14 @@ abstract class Controller extends BaseController
             ->documents
             ->read()[0];
 
-        return $document->data;
+        $data = $document->data;
+
+        return new Combat(
+            CombatantFactory::create($data['combatantOne']),
+            CombatantFactory::create($data['combatantTwo']),
+            CombatState::fromArray(['turns' => $data['turns'], 'winner' => $data['winner']]),
+            new Randomizer(),
+            $logger
+        );
     }
 }

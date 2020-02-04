@@ -17,12 +17,6 @@ class SyncController extends Controller
 
         $client = new Client($accountId, $authToken);
 
-//        $document = $client->sync->v1->services($syncSid)
-//            ->documents
-//            ->read()[0];
-//
-
-
         foreach (
             $client->sync->v1->services($syncSid)
                 ->documents
@@ -34,7 +28,7 @@ class SyncController extends Controller
         $document = $client->sync->v1->services($syncSid)
             ->documents
             ->create(['data' => $this->makeCombat($logger)->toArray()]);
-
-        var_dump($document);
+        
+        dd($document->data);
     }
 }

@@ -21,10 +21,9 @@ export default class Combat extends Component {
     }
 
     handleClick(index, e) {
-        // if this breaks it's probably because we didn't clone state before resetting
+        // https://www.freecodecamp.org/news/handling-state-in-react-four-immutable-approaches-to-consider-d1f5c00249d5/
         this.setState((state) => {
-            state.data.feedback = null;
-            return state;
+            return {...state, data: {...this.state.data, feedback: null}};
         });
 
         fetch('/combat/100/move/' + index)

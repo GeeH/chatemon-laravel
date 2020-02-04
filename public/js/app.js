@@ -51197,6 +51197,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _Feedback__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./Feedback */ "./resources/js/components/Feedback.js");
 function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
+function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); if (enumerableOnly) symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; }); keys.push.apply(keys, symbols); } return keys; }
+
+function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i] != null ? arguments[i] : {}; if (i % 2) { ownKeys(Object(source), true).forEach(function (key) { _defineProperty(target, key, source[key]); }); } else if (Object.getOwnPropertyDescriptors) { Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)); } else { ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } } return target; }
+
+function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
@@ -51254,10 +51260,13 @@ function (_Component) {
     value: function handleClick(index, e) {
       var _this3 = this;
 
-      // if this breaks it's probably because we didn't clone state before resetting
+      // https://www.freecodecamp.org/news/handling-state-in-react-four-immutable-approaches-to-consider-d1f5c00249d5/
       this.setState(function (state) {
-        state.data.feedback = null;
-        return state;
+        return _objectSpread({}, state, {
+          data: _objectSpread({}, _this3.state.data, {
+            feedback: null
+          })
+        });
       });
       fetch('/combat/100/move/' + index).then(function (response) {
         return response.json();
@@ -51573,7 +51582,6 @@ function (_Component) {
       var _this = this;
 
       var buttons = this.props.moves.map(function (move, index) {
-        var the_move = move[0];
         return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("button", {
           key: index,
           className: "button is-fullwidth is-large is-info",
@@ -51584,9 +51592,9 @@ function (_Component) {
           className: "column is-one-fifth"
         }, (index + 10).toString(36).toUpperCase()), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h1", {
           className: "column"
-        }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("strong", null, the_move.name)), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h5", {
+        }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("strong", null, move.name)), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h5", {
           className: "column is-one-fifth"
-        }, the_move.accuracy, "% - ", the_move.damage));
+        }, move.accuracy, "% - ", move.damage));
       });
       return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
         className: "buttons is-fullwidth"
