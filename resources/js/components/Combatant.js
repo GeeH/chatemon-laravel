@@ -20,14 +20,11 @@ export default class Combatant extends Component {
                                     Lv. {this.props.combatant.level}
                                 </h3>
                             </div>
-                            <div className="column is-12">
-                                <progress className="progress is-large" value={this.props.combatant.health}
-                                          max={this.props.combatant.maxHealth}>
-                                </progress>
-                            </div>
-                        </div>
-
                     </div>
+                            
+                    <progress className="progress is-large" value={this.props.combatant.health}
+                              max={this.props.combatant.maxHealth}>
+                    </progress>
                 </div>
             </section>
         );
