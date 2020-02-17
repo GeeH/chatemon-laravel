@@ -90,7 +90,9 @@ final class Combat
             return false;
         }
 
-        $this->feedback[] = "{$attacker->name} attacked {$defender->name} with <strong>{$move->name}</strong> it was effective";
+        $this->feedback[] =
+            "{$attacker->name} attacked {$defender->name} with <strong>{$move->name}</strong> it was effective";
+
         $damage = $this->calculateDamage($attacker->level, $attacker->attack, $move->damage, $defender->defence);
 
         $this->logger->info('Damage is ' . $damage);

@@ -33,7 +33,7 @@ export default class Combat extends Component {
                     .then(syncDoc => {
                         this.handleDocumentLoad(syncDoc);
                         syncDoc.on('updated', event => {
-                            console.debug("Game was updated", event.isLocal? "locally." : "by the other guy.");
+                            console.debug("Game was updated", event.isLocal ? "locally." : "by the other guy.");
                             this.handleDocumentLoad(syncDoc);
                         });
                     });
@@ -53,25 +53,25 @@ export default class Combat extends Component {
                     <hr/>
                     <div className="columns">
                         <div className="column">
-                            <Combatant combatant={this.state.data.combatantOne} color='warning' icon='code' />
+                            <Combatant combatant={this.state.data.combatantOne} color='warning' icon='code'/>
                         </div>
                         <div className="column">
-                            <Combatant combatant={this.state.data.combatantTwo} color='danger' icon='bug' />
+                            <Combatant combatant={this.state.data.combatantTwo} color='danger' icon='bug'/>
                         </div>
                     </div>
                     <hr/>
                     <div className="columns">
                         <div className="column"/>
                         <div className="column is-three-fifths">
-                            <Moves moves={this.state.data.combatantOne.moves} />
+                            <Moves moves={this.state.data.combatantOne.moves}/>
                         </div>
                         <div className="column"/>
                     </div>
-                    <hr />
                     <div className="columns">
                         <div className="column">
                             {this.state.data.feedback.length > 0 &&
-                            <Feedback feedback={this.state.data.feedback}/>
+                            <Feedback feedback={this.state.data.feedback} move_country={this.state.data.fromCountry}
+                                      move_number={this.state.data.fromNumber} />
                             }
                         </div>
                     </div>

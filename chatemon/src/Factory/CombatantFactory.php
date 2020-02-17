@@ -24,21 +24,21 @@ final class CombatantFactory
 
         if (empty($data['moves'])) {
             $move = new Move();
-            $move->name = 'Elevator Pitch';
+            $move->name = 'Var Dump';
             $move->accuracy = 100;
             $move->damage = 10;
             $combatant->moves[] = $move;
 
             $move = new Move();
-            $move->name = 'HR Message';
-            $move->accuracy = 90;
-            $move->damage = 20;
+            $move->name = 'Step Debug';
+            $move->accuracy = 75;
+            $move->damage = 25;
             $combatant->moves[] = $move;
 
             $move = new Move();
-            $move->name = 'Use Your Words';
+            $move->name = 'STACK OVERFLOW!';
             $move->accuracy = 50;
-            $move->damage = 30;
+            $move->damage = 50;
             $combatant->moves[] = $move;
 
             return $combatant;

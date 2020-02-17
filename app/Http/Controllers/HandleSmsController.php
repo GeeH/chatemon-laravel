@@ -24,11 +24,16 @@ class HandleSmsController extends Controller
         }
 
         $combat = $this->getCombat($logger);
-        $moveIndex = ucfirst($request->post('Body'));
+//        $this->saveCombat($combat);
 
         try {
+            $moveIndex = ucfirst($request->post('Body'));
+            $fromNumber = substr($request->post('From'), -3);
+            $fromCountry = $request->post('FromCountry');
+
+            // @todo Hacky nonsense, make this go away when we create bespoke opponents
             $combat->takeTurn($this->moveIndex[$moveIndex], 0);
-            $this->saveCombat($combat);
+            $this->saveCombat($combat, $fromCountry, $fromNumber);
             $messageResponse->message("Thanks, You've played move {$moveIndex}");
             return (string)$messageResponse;
         } catch (CombatAlreadyWonException $e) {

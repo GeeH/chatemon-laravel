@@ -62380,12 +62380,14 @@ function (_Component) {
           moves: this.state.data.combatantOne.moves
         })), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
           className: "column"
-        })), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("hr", null), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+        })), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
           className: "columns"
         }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
           className: "column"
         }, this.state.data.feedback.length > 0 && react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(_Feedback__WEBPACK_IMPORTED_MODULE_3__["default"], {
-          feedback: this.state.data.feedback
+          feedback: this.state.data.feedback,
+          move_country: this.state.data.fromCountry,
+          move_number: this.state.data.fromNumber
         }))));
       } else {
         return '';
@@ -62459,20 +62461,18 @@ function (_Component) {
       })), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
         className: "row columns column"
       }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
-        className: "column has-text-left is-6"
+        className: "column has-text-left is-9 is-clipped"
       }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h3", {
         className: "title"
       }, this.props.combatant.name)), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
-        className: "column has-text-right is-6"
+        className: "column has-text-right is-3"
       }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h3", {
         className: "title"
-      }, "Lv. ", this.props.combatant.level)), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
-        className: "column is-12"
-      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("progress", {
+      }, "Lv. ", this.props.combatant.level)))), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("progress", {
         className: "progress is-large",
         value: this.props.combatant.health,
         max: this.props.combatant.maxHealth
-      }))))));
+      })));
     }
   }]);
 
@@ -62529,7 +62529,9 @@ function (_Component) {
   _createClass(Feedback, [{
     key: "render",
     value: function render() {
-      return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+      return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+        className: "notification has-text-centered is-size-6"
+      }, "Move played by number from ", react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("strong", null, this.props.move_country), " ending in ", react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("strong", null, this.props.move_number)), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
         className: "notification has-text-centered is-size-1"
       }, this.props.feedback.map(function (feedback, index) {
         return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h3", {
@@ -62538,7 +62540,7 @@ function (_Component) {
             __html: feedback
           }
         });
-      }));
+      })));
     }
   }]);
 

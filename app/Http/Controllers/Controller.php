@@ -79,17 +79,26 @@ abstract class Controller extends BaseController
         );
     }
 
-    protected function saveCombat(Combat $combat): void
+    protected function saveCombat(Combat $combat, string $country = null, string $number = null): void
     {
         $document = $this->getCombatDocument();
-        $document->update([
-            'data' => $combat->toArray(),
-        ]);
+        $data = $combat->toArray();
+
+        if ($country) {
+            $data['fromCountry'] = $country;
+        }
+        if ($number) {
+            $data['fromNumber'] = $number;
+        }
+
+        $document->update(['data' => $data]);
     }
 
     protected function startNewCombat(LoggerInterface $logger): void
     {
-        $this->saveCombat($this->makeCombat($logger));
+        $combat = $this->makeCombat($logger);
+        $combat->getCombatantTwo()->moves[0]->name = 'Unexpected Meeting';
+        $this->saveCombat($combat);
     }
 
     protected function getCombatDocument(): DocumentInstance
