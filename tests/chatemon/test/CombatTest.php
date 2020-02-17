@@ -38,7 +38,7 @@ final class CombatTest extends TestCase
         }
 
         return new Combat(
-            CombatantFactory::create(
+            CombatantFactory::fromArray(
                 !empty($combatantOneData) ? $combatantOneData :
                     [
                         'name' => 'One', 'level' => 1, 'attack' => 100, 'defence' => 5,
@@ -46,7 +46,7 @@ final class CombatTest extends TestCase
                         'id' => Uuid::uuid4()->toString()
                     ]
             ),
-            CombatantFactory::create(
+            CombatantFactory::fromArray(
                 !empty($combatantTwoData) ? $combatantTwoData :
                     [
                         'name' => 'Two', 'level' => 1, 'attack' => 100, 'defence' => 5,

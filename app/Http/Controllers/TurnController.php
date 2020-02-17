@@ -10,12 +10,10 @@ class TurnController extends Controller
 {
     public function __invoke(string $id, int $moveIndex, Logger $logger): JsonResponse
     {
-        $combat = $this->makeCombat($logger);
+        die();
+        $combat = $this->getCombat($logger);
         $feedback = $combat->takeTurn($moveIndex, 0);
-
-        $return = $combat->toArray();
-        $return['feedback'] = $feedback;
-
+                $this->saveCombat($combat);
         return response()->json(
             $return
         );

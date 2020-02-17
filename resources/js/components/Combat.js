@@ -2,37 +2,48 @@ import React, {Component} from 'react';
 import Combatant from "./Combatant";
 import Moves from "./Moves";
 import Feedback from "./Feedback";
+import Client, {SyncClient} from "twilio-sync/lib/client";
 
 export default class Combat extends Component {
     constructor(props) {
         super(props);
         this.state = {data: {}};
-        this.handleClick = this.handleClick.bind(this);
+        this.handleDocumentLoad = this.handleDocumentLoad.bind(this);
     }
 
     componentDidMount() {
-        fetch('/combat/100')
+        // replace http request with getting initial state from sync
+        // bind event handler to sync update event so it updates React's state
+        fetch('/token')
             .then(response => {
                 return response.json();
             })
             .then(json => {
-                this.setState({data: json});
+                // json = tokenData in object
+                let syncClient = new Client(json.token, {logLevel: 'info'});
+                syncClient.on('connectionStateChanged', function (state, syncClient) {
+                    if (state !== 'connected') {
+                        console.log('Sync is not live (websocket connection ' + state);
+                    } else {
+                        console.log('Sync is connected');
+                    }
+                });
+
+                syncClient.document('CHATEMON_FIGHT')
+                    .then(syncDoc => {
+                        this.handleDocumentLoad(syncDoc);
+                        syncDoc.on('updated', event => {
+                            console.debug("Game was updated", event.isLocal? "locally." : "by the other guy.");
+                            this.handleDocumentLoad(syncDoc);
+                        });
+                    });
+
             });
     }
 
-    handleClick(index, e) {
-        // https://www.freecodecamp.org/news/handling-state-in-react-four-immutable-approaches-to-consider-d1f5c00249d5/
-        this.setState((state) => {
-            return {...state, data: {...this.state.data, feedback: null}};
-        });
-
-        fetch('/combat/100/move/' + index)
-            .then(response => {
-                return response.json()
-            })
-            .then(json => {
-                this.setState({data: json})
-            });
+    handleDocumentLoad(syncDoc) {
+        const data = syncDoc.value;
+        this.setState({data: data});
     }
 
     render() {
@@ -42,24 +53,25 @@ export default class Combat extends Component {
                     <hr/>
                     <div className="columns">
                         <div className="column">
-                            <Combatant combatant={this.state.data.combatantOne} color='warning'/>
+                            <Combatant combatant={this.state.data.combatantOne} color='warning' icon='code' />
                         </div>
                         <div className="column">
-                            <Combatant combatant={this.state.data.combatantTwo} color='danger'/>
+                            <Combatant combatant={this.state.data.combatantTwo} color='danger' icon='bug' />
                         </div>
                     </div>
                     <hr/>
                     <div className="columns">
                         <div className="column"/>
                         <div className="column is-three-fifths">
-                            <Moves moves={this.state.data.combatantOne.moves} handleClick={this.handleClick}/>
+                            <Moves moves={this.state.data.combatantOne.moves} />
                         </div>
                         <div className="column"/>
                     </div>
+                    <hr />
                     <div className="columns">
                         <div className="column">
-                            {this.state.data.feedback &&
-                                <Feedback feedback={this.state.data.feedback}/>
+                            {this.state.data.feedback.length > 0 &&
+                            <Feedback feedback={this.state.data.feedback}/>
                             }
                         </div>
                     </div>

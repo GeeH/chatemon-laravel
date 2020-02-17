@@ -13,10 +13,8 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
-
+Route::get('/', 'HomeController');
 Route::get('/combat/{id}', 'CombatController');
 Route::get('/combat/{id}/move/{moveIndex}', 'TurnController');
-Route::get('/sync/create', 'SyncController');
+Route::post('/handle/sms', 'HandleSmsController');
+Route::get('/token', 'TokenController');

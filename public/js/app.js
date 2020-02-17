@@ -1923,6 +1923,1140 @@ module.exports = {
 
 /***/ }),
 
+/***/ "./node_modules/events/events.js":
+/*!***************************************!*\
+  !*** ./node_modules/events/events.js ***!
+  \***************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+
+var R = typeof Reflect === 'object' ? Reflect : null
+var ReflectApply = R && typeof R.apply === 'function'
+  ? R.apply
+  : function ReflectApply(target, receiver, args) {
+    return Function.prototype.apply.call(target, receiver, args);
+  }
+
+var ReflectOwnKeys
+if (R && typeof R.ownKeys === 'function') {
+  ReflectOwnKeys = R.ownKeys
+} else if (Object.getOwnPropertySymbols) {
+  ReflectOwnKeys = function ReflectOwnKeys(target) {
+    return Object.getOwnPropertyNames(target)
+      .concat(Object.getOwnPropertySymbols(target));
+  };
+} else {
+  ReflectOwnKeys = function ReflectOwnKeys(target) {
+    return Object.getOwnPropertyNames(target);
+  };
+}
+
+function ProcessEmitWarning(warning) {
+  if (console && console.warn) console.warn(warning);
+}
+
+var NumberIsNaN = Number.isNaN || function NumberIsNaN(value) {
+  return value !== value;
+}
+
+function EventEmitter() {
+  EventEmitter.init.call(this);
+}
+module.exports = EventEmitter;
+
+// Backwards-compat with node 0.10.x
+EventEmitter.EventEmitter = EventEmitter;
+
+EventEmitter.prototype._events = undefined;
+EventEmitter.prototype._eventsCount = 0;
+EventEmitter.prototype._maxListeners = undefined;
+
+// By default EventEmitters will print a warning if more than 10 listeners are
+// added to it. This is a useful default which helps finding memory leaks.
+var defaultMaxListeners = 10;
+
+Object.defineProperty(EventEmitter, 'defaultMaxListeners', {
+  enumerable: true,
+  get: function() {
+    return defaultMaxListeners;
+  },
+  set: function(arg) {
+    if (typeof arg !== 'number' || arg < 0 || NumberIsNaN(arg)) {
+      throw new RangeError('The value of "defaultMaxListeners" is out of range. It must be a non-negative number. Received ' + arg + '.');
+    }
+    defaultMaxListeners = arg;
+  }
+});
+
+EventEmitter.init = function() {
+
+  if (this._events === undefined ||
+      this._events === Object.getPrototypeOf(this)._events) {
+    this._events = Object.create(null);
+    this._eventsCount = 0;
+  }
+
+  this._maxListeners = this._maxListeners || undefined;
+};
+
+// Obviously not all Emitters should be limited to 10. This function allows
+// that to be increased. Set to zero for unlimited.
+EventEmitter.prototype.setMaxListeners = function setMaxListeners(n) {
+  if (typeof n !== 'number' || n < 0 || NumberIsNaN(n)) {
+    throw new RangeError('The value of "n" is out of range. It must be a non-negative number. Received ' + n + '.');
+  }
+  this._maxListeners = n;
+  return this;
+};
+
+function $getMaxListeners(that) {
+  if (that._maxListeners === undefined)
+    return EventEmitter.defaultMaxListeners;
+  return that._maxListeners;
+}
+
+EventEmitter.prototype.getMaxListeners = function getMaxListeners() {
+  return $getMaxListeners(this);
+};
+
+EventEmitter.prototype.emit = function emit(type) {
+  var args = [];
+  for (var i = 1; i < arguments.length; i++) args.push(arguments[i]);
+  var doError = (type === 'error');
+
+  var events = this._events;
+  if (events !== undefined)
+    doError = (doError && events.error === undefined);
+  else if (!doError)
+    return false;
+
+  // If there is no 'error' event listener then throw.
+  if (doError) {
+    var er;
+    if (args.length > 0)
+      er = args[0];
+    if (er instanceof Error) {
+      // Note: The comments on the `throw` lines are intentional, they show
+      // up in Node's output if this results in an unhandled exception.
+      throw er; // Unhandled 'error' event
+    }
+    // At least give some kind of context to the user
+    var err = new Error('Unhandled error.' + (er ? ' (' + er.message + ')' : ''));
+    err.context = er;
+    throw err; // Unhandled 'error' event
+  }
+
+  var handler = events[type];
+
+  if (handler === undefined)
+    return false;
+
+  if (typeof handler === 'function') {
+    ReflectApply(handler, this, args);
+  } else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      ReflectApply(listeners[i], this, args);
+  }
+
+  return true;
+};
+
+function _addListener(target, type, listener, prepend) {
+  var m;
+  var events;
+  var existing;
+
+  if (typeof listener !== 'function') {
+    throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
+  }
+
+  events = target._events;
+  if (events === undefined) {
+    events = target._events = Object.create(null);
+    target._eventsCount = 0;
+  } else {
+    // To avoid recursion in the case that type === "newListener"! Before
+    // adding it to the listeners, first emit "newListener".
+    if (events.newListener !== undefined) {
+      target.emit('newListener', type,
+                  listener.listener ? listener.listener : listener);
+
+      // Re-assign `events` because a newListener handler could have caused the
+      // this._events to be assigned to a new object
+      events = target._events;
+    }
+    existing = events[type];
+  }
+
+  if (existing === undefined) {
+    // Optimize the case of one listener. Don't need the extra array object.
+    existing = events[type] = listener;
+    ++target._eventsCount;
+  } else {
+    if (typeof existing === 'function') {
+      // Adding the second element, need to change to array.
+      existing = events[type] =
+        prepend ? [listener, existing] : [existing, listener];
+      // If we've already got an array, just append.
+    } else if (prepend) {
+      existing.unshift(listener);
+    } else {
+      existing.push(listener);
+    }
+
+    // Check for listener leak
+    m = $getMaxListeners(target);
+    if (m > 0 && existing.length > m && !existing.warned) {
+      existing.warned = true;
+      // No error code for this since it is a Warning
+      // eslint-disable-next-line no-restricted-syntax
+      var w = new Error('Possible EventEmitter memory leak detected. ' +
+                          existing.length + ' ' + String(type) + ' listeners ' +
+                          'added. Use emitter.setMaxListeners() to ' +
+                          'increase limit');
+      w.name = 'MaxListenersExceededWarning';
+      w.emitter = target;
+      w.type = type;
+      w.count = existing.length;
+      ProcessEmitWarning(w);
+    }
+  }
+
+  return target;
+}
+
+EventEmitter.prototype.addListener = function addListener(type, listener) {
+  return _addListener(this, type, listener, false);
+};
+
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+EventEmitter.prototype.prependListener =
+    function prependListener(type, listener) {
+      return _addListener(this, type, listener, true);
+    };
+
+function onceWrapper() {
+  var args = [];
+  for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
+  if (!this.fired) {
+    this.target.removeListener(this.type, this.wrapFn);
+    this.fired = true;
+    ReflectApply(this.listener, this.target, args);
+  }
+}
+
+function _onceWrap(target, type, listener) {
+  var state = { fired: false, wrapFn: undefined, target: target, type: type, listener: listener };
+  var wrapped = onceWrapper.bind(state);
+  wrapped.listener = listener;
+  state.wrapFn = wrapped;
+  return wrapped;
+}
+
+EventEmitter.prototype.once = function once(type, listener) {
+  if (typeof listener !== 'function') {
+    throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
+  }
+  this.on(type, _onceWrap(this, type, listener));
+  return this;
+};
+
+EventEmitter.prototype.prependOnceListener =
+    function prependOnceListener(type, listener) {
+      if (typeof listener !== 'function') {
+        throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
+      }
+      this.prependListener(type, _onceWrap(this, type, listener));
+      return this;
+    };
+
+// Emits a 'removeListener' event if and only if the listener was removed.
+EventEmitter.prototype.removeListener =
+    function removeListener(type, listener) {
+      var list, events, position, i, originalListener;
+
+      if (typeof listener !== 'function') {
+        throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
+      }
+
+      events = this._events;
+      if (events === undefined)
+        return this;
+
+      list = events[type];
+      if (list === undefined)
+        return this;
+
+      if (list === listener || list.listener === listener) {
+        if (--this._eventsCount === 0)
+          this._events = Object.create(null);
+        else {
+          delete events[type];
+          if (events.removeListener)
+            this.emit('removeListener', type, list.listener || listener);
+        }
+      } else if (typeof list !== 'function') {
+        position = -1;
+
+        for (i = list.length - 1; i >= 0; i--) {
+          if (list[i] === listener || list[i].listener === listener) {
+            originalListener = list[i].listener;
+            position = i;
+            break;
+          }
+        }
+
+        if (position < 0)
+          return this;
+
+        if (position === 0)
+          list.shift();
+        else {
+          spliceOne(list, position);
+        }
+
+        if (list.length === 1)
+          events[type] = list[0];
+
+        if (events.removeListener !== undefined)
+          this.emit('removeListener', type, originalListener || listener);
+      }
+
+      return this;
+    };
+
+EventEmitter.prototype.off = EventEmitter.prototype.removeListener;
+
+EventEmitter.prototype.removeAllListeners =
+    function removeAllListeners(type) {
+      var listeners, events, i;
+
+      events = this._events;
+      if (events === undefined)
+        return this;
+
+      // not listening for removeListener, no need to emit
+      if (events.removeListener === undefined) {
+        if (arguments.length === 0) {
+          this._events = Object.create(null);
+          this._eventsCount = 0;
+        } else if (events[type] !== undefined) {
+          if (--this._eventsCount === 0)
+            this._events = Object.create(null);
+          else
+            delete events[type];
+        }
+        return this;
+      }
+
+      // emit removeListener for all listeners on all events
+      if (arguments.length === 0) {
+        var keys = Object.keys(events);
+        var key;
+        for (i = 0; i < keys.length; ++i) {
+          key = keys[i];
+          if (key === 'removeListener') continue;
+          this.removeAllListeners(key);
+        }
+        this.removeAllListeners('removeListener');
+        this._events = Object.create(null);
+        this._eventsCount = 0;
+        return this;
+      }
+
+      listeners = events[type];
+
+      if (typeof listeners === 'function') {
+        this.removeListener(type, listeners);
+      } else if (listeners !== undefined) {
+        // LIFO order
+        for (i = listeners.length - 1; i >= 0; i--) {
+          this.removeListener(type, listeners[i]);
+        }
+      }
+
+      return this;
+    };
+
+function _listeners(target, type, unwrap) {
+  var events = target._events;
+
+  if (events === undefined)
+    return [];
+
+  var evlistener = events[type];
+  if (evlistener === undefined)
+    return [];
+
+  if (typeof evlistener === 'function')
+    return unwrap ? [evlistener.listener || evlistener] : [evlistener];
+
+  return unwrap ?
+    unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
+}
+
+EventEmitter.prototype.listeners = function listeners(type) {
+  return _listeners(this, type, true);
+};
+
+EventEmitter.prototype.rawListeners = function rawListeners(type) {
+  return _listeners(this, type, false);
+};
+
+EventEmitter.listenerCount = function(emitter, type) {
+  if (typeof emitter.listenerCount === 'function') {
+    return emitter.listenerCount(type);
+  } else {
+    return listenerCount.call(emitter, type);
+  }
+};
+
+EventEmitter.prototype.listenerCount = listenerCount;
+function listenerCount(type) {
+  var events = this._events;
+
+  if (events !== undefined) {
+    var evlistener = events[type];
+
+    if (typeof evlistener === 'function') {
+      return 1;
+    } else if (evlistener !== undefined) {
+      return evlistener.length;
+    }
+  }
+
+  return 0;
+}
+
+EventEmitter.prototype.eventNames = function eventNames() {
+  return this._eventsCount > 0 ? ReflectOwnKeys(this._events) : [];
+};
+
+function arrayClone(arr, n) {
+  var copy = new Array(n);
+  for (var i = 0; i < n; ++i)
+    copy[i] = arr[i];
+  return copy;
+}
+
+function spliceOne(list, index) {
+  for (; index + 1 < list.length; index++)
+    list[index] = list[index + 1];
+  list.pop();
+}
+
+function unwrapListeners(arr) {
+  var ret = new Array(arr.length);
+  for (var i = 0; i < ret.length; ++i) {
+    ret[i] = arr[i].listener || arr[i];
+  }
+  return ret;
+}
+
+
+/***/ }),
+
+/***/ "./node_modules/javascript-state-machine/lib/state-machine.js":
+/*!********************************************************************!*\
+  !*** ./node_modules/javascript-state-machine/lib/state-machine.js ***!
+  \********************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+(function webpackUniversalModuleDefinition(root, factory) {
+	if(true)
+		module.exports = factory();
+	else {}
+})(this, function() {
+return /******/ (function(modules) { // webpackBootstrap
+/******/ 	// The module cache
+/******/ 	var installedModules = {};
+/******/
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/
+/******/ 		// Check if module is in cache
+/******/ 		if(installedModules[moduleId]) {
+/******/ 			return installedModules[moduleId].exports;
+/******/ 		}
+/******/ 		// Create a new module (and put it into the cache)
+/******/ 		var module = installedModules[moduleId] = {
+/******/ 			i: moduleId,
+/******/ 			l: false,
+/******/ 			exports: {}
+/******/ 		};
+/******/
+/******/ 		// Execute the module function
+/******/ 		modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
+/******/
+/******/ 		// Flag the module as loaded
+/******/ 		module.l = true;
+/******/
+/******/ 		// Return the exports of the module
+/******/ 		return module.exports;
+/******/ 	}
+/******/
+/******/
+/******/ 	// expose the modules object (__webpack_modules__)
+/******/ 	__webpack_require__.m = modules;
+/******/
+/******/ 	// expose the module cache
+/******/ 	__webpack_require__.c = installedModules;
+/******/
+/******/ 	// identity function for calling harmony imports with the correct context
+/******/ 	__webpack_require__.i = function(value) { return value; };
+/******/
+/******/ 	// define getter function for harmony exports
+/******/ 	__webpack_require__.d = function(exports, name, getter) {
+/******/ 		if(!__webpack_require__.o(exports, name)) {
+/******/ 			Object.defineProperty(exports, name, {
+/******/ 				configurable: false,
+/******/ 				enumerable: true,
+/******/ 				get: getter
+/******/ 			});
+/******/ 		}
+/******/ 	};
+/******/
+/******/ 	// getDefaultExport function for compatibility with non-harmony modules
+/******/ 	__webpack_require__.n = function(module) {
+/******/ 		var getter = module && module.__esModule ?
+/******/ 			function getDefault() { return module['default']; } :
+/******/ 			function getModuleExports() { return module; };
+/******/ 		__webpack_require__.d(getter, 'a', getter);
+/******/ 		return getter;
+/******/ 	};
+/******/
+/******/ 	// Object.prototype.hasOwnProperty.call
+/******/ 	__webpack_require__.o = function(object, property) { return Object.prototype.hasOwnProperty.call(object, property); };
+/******/
+/******/ 	// __webpack_public_path__
+/******/ 	__webpack_require__.p = "";
+/******/
+/******/ 	// Load entry module and return exports
+/******/ 	return __webpack_require__(__webpack_require__.s = 5);
+/******/ })
+/************************************************************************/
+/******/ ([
+/* 0 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+module.exports = function(target, sources) {
+  var n, source, key;
+  for(n = 1 ; n < arguments.length ; n++) {
+    source = arguments[n];
+    for(key in source) {
+      if (source.hasOwnProperty(key))
+        target[key] = source[key];
+    }
+  }
+  return target;
+}
+
+
+/***/ }),
+/* 1 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+//-------------------------------------------------------------------------------------------------
+
+var mixin = __webpack_require__(0);
+
+//-------------------------------------------------------------------------------------------------
+
+module.exports = {
+
+  build: function(target, config) {
+    var n, max, plugin, plugins = config.plugins;
+    for(n = 0, max = plugins.length ; n < max ; n++) {
+      plugin = plugins[n];
+      if (plugin.methods)
+        mixin(target, plugin.methods);
+      if (plugin.properties)
+        Object.defineProperties(target, plugin.properties);
+    }
+  },
+
+  hook: function(fsm, name, additional) {
+    var n, max, method, plugin,
+        plugins = fsm.config.plugins,
+        args    = [fsm.context];
+
+    if (additional)
+      args = args.concat(additional)
+
+    for(n = 0, max = plugins.length ; n < max ; n++) {
+      plugin = plugins[n]
+      method = plugins[n][name]
+      if (method)
+        method.apply(plugin, args);
+    }
+  }
+
+}
+
+//-------------------------------------------------------------------------------------------------
+
+
+/***/ }),
+/* 2 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+//-------------------------------------------------------------------------------------------------
+
+function camelize(label) {
+
+  if (label.length === 0)
+    return label;
+
+  var n, result, word, words = label.split(/[_-]/);
+
+  // single word with first character already lowercase, return untouched
+  if ((words.length === 1) && (words[0][0].toLowerCase() === words[0][0]))
+    return label;
+
+  result = words[0].toLowerCase();
+  for(n = 1 ; n < words.length ; n++) {
+    result = result + words[n].charAt(0).toUpperCase() + words[n].substring(1).toLowerCase();
+  }
+
+  return result;
+}
+
+//-------------------------------------------------------------------------------------------------
+
+camelize.prepended = function(prepend, label) {
+  label = camelize(label);
+  return prepend + label[0].toUpperCase() + label.substring(1);
+}
+
+//-------------------------------------------------------------------------------------------------
+
+module.exports = camelize;
+
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+//-------------------------------------------------------------------------------------------------
+
+var mixin    = __webpack_require__(0),
+    camelize = __webpack_require__(2);
+
+//-------------------------------------------------------------------------------------------------
+
+function Config(options, StateMachine) {
+
+  options = options || {};
+
+  this.options     = options; // preserving original options can be useful (e.g visualize plugin)
+  this.defaults    = StateMachine.defaults;
+  this.states      = [];
+  this.transitions = [];
+  this.map         = {};
+  this.lifecycle   = this.configureLifecycle();
+  this.init        = this.configureInitTransition(options.init);
+  this.data        = this.configureData(options.data);
+  this.methods     = this.configureMethods(options.methods);
+
+  this.map[this.defaults.wildcard] = {};
+
+  this.configureTransitions(options.transitions || []);
+
+  this.plugins = this.configurePlugins(options.plugins, StateMachine.plugin);
+
+}
+
+//-------------------------------------------------------------------------------------------------
+
+mixin(Config.prototype, {
+
+  addState: function(name) {
+    if (!this.map[name]) {
+      this.states.push(name);
+      this.addStateLifecycleNames(name);
+      this.map[name] = {};
+    }
+  },
+
+  addStateLifecycleNames: function(name) {
+    this.lifecycle.onEnter[name] = camelize.prepended('onEnter', name);
+    this.lifecycle.onLeave[name] = camelize.prepended('onLeave', name);
+    this.lifecycle.on[name]      = camelize.prepended('on',      name);
+  },
+
+  addTransition: function(name) {
+    if (this.transitions.indexOf(name) < 0) {
+      this.transitions.push(name);
+      this.addTransitionLifecycleNames(name);
+    }
+  },
+
+  addTransitionLifecycleNames: function(name) {
+    this.lifecycle.onBefore[name] = camelize.prepended('onBefore', name);
+    this.lifecycle.onAfter[name]  = camelize.prepended('onAfter',  name);
+    this.lifecycle.on[name]       = camelize.prepended('on',       name);
+  },
+
+  mapTransition: function(transition) {
+    var name = transition.name,
+        from = transition.from,
+        to   = transition.to;
+    this.addState(from);
+    if (typeof to !== 'function')
+      this.addState(to);
+    this.addTransition(name);
+    this.map[from][name] = transition;
+    return transition;
+  },
+
+  configureLifecycle: function() {
+    return {
+      onBefore: { transition: 'onBeforeTransition' },
+      onAfter:  { transition: 'onAfterTransition'  },
+      onEnter:  { state:      'onEnterState'       },
+      onLeave:  { state:      'onLeaveState'       },
+      on:       { transition: 'onTransition'       }
+    };
+  },
+
+  configureInitTransition: function(init) {
+    if (typeof init === 'string') {
+      return this.mapTransition(mixin({}, this.defaults.init, { to: init, active: true }));
+    }
+    else if (typeof init === 'object') {
+      return this.mapTransition(mixin({}, this.defaults.init, init, { active: true }));
+    }
+    else {
+      this.addState(this.defaults.init.from);
+      return this.defaults.init;
+    }
+  },
+
+  configureData: function(data) {
+    if (typeof data === 'function')
+      return data;
+    else if (typeof data === 'object')
+      return function() { return data; }
+    else
+      return function() { return {};  }
+  },
+
+  configureMethods: function(methods) {
+    return methods || {};
+  },
+
+  configurePlugins: function(plugins, builtin) {
+    plugins = plugins || [];
+    var n, max, plugin;
+    for(n = 0, max = plugins.length ; n < max ; n++) {
+      plugin = plugins[n];
+      if (typeof plugin === 'function')
+        plugins[n] = plugin = plugin()
+      if (plugin.configure)
+        plugin.configure(this);
+    }
+    return plugins
+  },
+
+  configureTransitions: function(transitions) {
+    var i, n, transition, from, to, wildcard = this.defaults.wildcard;
+    for(n = 0 ; n < transitions.length ; n++) {
+      transition = transitions[n];
+      from  = Array.isArray(transition.from) ? transition.from : [transition.from || wildcard]
+      to    = transition.to || wildcard;
+      for(i = 0 ; i < from.length ; i++) {
+        this.mapTransition({ name: transition.name, from: from[i], to: to });
+      }
+    }
+  },
+
+  transitionFor: function(state, transition) {
+    var wildcard = this.defaults.wildcard;
+    return this.map[state][transition] ||
+           this.map[wildcard][transition];
+  },
+
+  transitionsFor: function(state) {
+    var wildcard = this.defaults.wildcard;
+    return Object.keys(this.map[state]).concat(Object.keys(this.map[wildcard]));
+  },
+
+  allStates: function() {
+    return this.states;
+  },
+
+  allTransitions: function() {
+    return this.transitions;
+  }
+
+});
+
+//-------------------------------------------------------------------------------------------------
+
+module.exports = Config;
+
+//-------------------------------------------------------------------------------------------------
+
+
+/***/ }),
+/* 4 */
+/***/ (function(module, exports, __webpack_require__) {
+
+
+var mixin      = __webpack_require__(0),
+    Exception  = __webpack_require__(6),
+    plugin     = __webpack_require__(1),
+    UNOBSERVED = [ null, [] ];
+
+//-------------------------------------------------------------------------------------------------
+
+function JSM(context, config) {
+  this.context   = context;
+  this.config    = config;
+  this.state     = config.init.from;
+  this.observers = [context];
+}
+
+//-------------------------------------------------------------------------------------------------
+
+mixin(JSM.prototype, {
+
+  init: function(args) {
+    mixin(this.context, this.config.data.apply(this.context, args));
+    plugin.hook(this, 'init');
+    if (this.config.init.active)
+      return this.fire(this.config.init.name, []);
+  },
+
+  is: function(state) {
+    return Array.isArray(state) ? (state.indexOf(this.state) >= 0) : (this.state === state);
+  },
+
+  isPending: function() {
+    return this.pending;
+  },
+
+  can: function(transition) {
+    return !this.isPending() && !!this.seek(transition);
+  },
+
+  cannot: function(transition) {
+    return !this.can(transition);
+  },
+
+  allStates: function() {
+    return this.config.allStates();
+  },
+
+  allTransitions: function() {
+    return this.config.allTransitions();
+  },
+
+  transitions: function() {
+    return this.config.transitionsFor(this.state);
+  },
+
+  seek: function(transition, args) {
+    var wildcard = this.config.defaults.wildcard,
+        entry    = this.config.transitionFor(this.state, transition),
+        to       = entry && entry.to;
+    if (typeof to === 'function')
+      return to.apply(this.context, args);
+    else if (to === wildcard)
+      return this.state
+    else
+      return to
+  },
+
+  fire: function(transition, args) {
+    return this.transit(transition, this.state, this.seek(transition, args), args);
+  },
+
+  transit: function(transition, from, to, args) {
+
+    var lifecycle = this.config.lifecycle,
+        changed   = this.config.options.observeUnchangedState || (from !== to);
+
+    if (!to)
+      return this.context.onInvalidTransition(transition, from, to);
+
+    if (this.isPending())
+      return this.context.onPendingTransition(transition, from, to);
+
+    this.config.addState(to);  // might need to add this state if it's unknown (e.g. conditional transition or goto)
+
+    this.beginTransit();
+
+    args.unshift({             // this context will be passed to each lifecycle event observer
+      transition: transition,
+      from:       from,
+      to:         to,
+      fsm:        this.context
+    });
+
+    return this.observeEvents([
+                this.observersForEvent(lifecycle.onBefore.transition),
+                this.observersForEvent(lifecycle.onBefore[transition]),
+      changed ? this.observersForEvent(lifecycle.onLeave.state) : UNOBSERVED,
+      changed ? this.observersForEvent(lifecycle.onLeave[from]) : UNOBSERVED,
+                this.observersForEvent(lifecycle.on.transition),
+      changed ? [ 'doTransit', [ this ] ]                       : UNOBSERVED,
+      changed ? this.observersForEvent(lifecycle.onEnter.state) : UNOBSERVED,
+      changed ? this.observersForEvent(lifecycle.onEnter[to])   : UNOBSERVED,
+      changed ? this.observersForEvent(lifecycle.on[to])        : UNOBSERVED,
+                this.observersForEvent(lifecycle.onAfter.transition),
+                this.observersForEvent(lifecycle.onAfter[transition]),
+                this.observersForEvent(lifecycle.on[transition])
+    ], args);
+  },
+
+  beginTransit: function()          { this.pending = true;                 },
+  endTransit:   function(result)    { this.pending = false; return result; },
+  failTransit:  function(result)    { this.pending = false; throw result;  },
+  doTransit:    function(lifecycle) { this.state = lifecycle.to;           },
+
+  observe: function(args) {
+    if (args.length === 2) {
+      var observer = {};
+      observer[args[0]] = args[1];
+      this.observers.push(observer);
+    }
+    else {
+      this.observers.push(args[0]);
+    }
+  },
+
+  observersForEvent: function(event) { // TODO: this could be cached
+    var n = 0, max = this.observers.length, observer, result = [];
+    for( ; n < max ; n++) {
+      observer = this.observers[n];
+      if (observer[event])
+        result.push(observer);
+    }
+    return [ event, result, true ]
+  },
+
+  observeEvents: function(events, args, previousEvent, previousResult) {
+    if (events.length === 0) {
+      return this.endTransit(previousResult === undefined ? true : previousResult);
+    }
+
+    var event     = events[0][0],
+        observers = events[0][1],
+        pluggable = events[0][2];
+
+    args[0].event = event;
+    if (event && pluggable && event !== previousEvent)
+      plugin.hook(this, 'lifecycle', args);
+
+    if (observers.length === 0) {
+      events.shift();
+      return this.observeEvents(events, args, event, previousResult);
+    }
+    else {
+      var observer = observers.shift(),
+          result = observer[event].apply(observer, args);
+      if (result && typeof result.then === 'function') {
+        return result.then(this.observeEvents.bind(this, events, args, event))
+                     .catch(this.failTransit.bind(this))
+      }
+      else if (result === false) {
+        return this.endTransit(false);
+      }
+      else {
+        return this.observeEvents(events, args, event, result);
+      }
+    }
+  },
+
+  onInvalidTransition: function(transition, from, to) {
+    throw new Exception("transition is invalid in current state", transition, from, to, this.state);
+  },
+
+  onPendingTransition: function(transition, from, to) {
+    throw new Exception("transition is invalid while previous transition is still in progress", transition, from, to, this.state);
+  }
+
+});
+
+//-------------------------------------------------------------------------------------------------
+
+module.exports = JSM;
+
+//-------------------------------------------------------------------------------------------------
+
+
+/***/ }),
+/* 5 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+//-----------------------------------------------------------------------------------------------
+
+var mixin    = __webpack_require__(0),
+    camelize = __webpack_require__(2),
+    plugin   = __webpack_require__(1),
+    Config   = __webpack_require__(3),
+    JSM      = __webpack_require__(4);
+
+//-----------------------------------------------------------------------------------------------
+
+var PublicMethods = {
+  is:                  function(state)       { return this._fsm.is(state)                                     },
+  can:                 function(transition)  { return this._fsm.can(transition)                               },
+  cannot:              function(transition)  { return this._fsm.cannot(transition)                            },
+  observe:             function()            { return this._fsm.observe(arguments)                            },
+  transitions:         function()            { return this._fsm.transitions()                                 },
+  allTransitions:      function()            { return this._fsm.allTransitions()                              },
+  allStates:           function()            { return this._fsm.allStates()                                   },
+  onInvalidTransition: function(t, from, to) { return this._fsm.onInvalidTransition(t, from, to)              },
+  onPendingTransition: function(t, from, to) { return this._fsm.onPendingTransition(t, from, to)              },
+}
+
+var PublicProperties = {
+  state: {
+    configurable: false,
+    enumerable:   true,
+    get: function() {
+      return this._fsm.state;
+    },
+    set: function(state) {
+      throw Error('use transitions to change state')
+    }
+  }
+}
+
+//-----------------------------------------------------------------------------------------------
+
+function StateMachine(options) {
+  return apply(this || {}, options);
+}
+
+function factory() {
+  var cstor, options;
+  if (typeof arguments[0] === 'function') {
+    cstor   = arguments[0];
+    options = arguments[1] || {};
+  }
+  else {
+    cstor   = function() { this._fsm.apply(this, arguments) };
+    options = arguments[0] || {};
+  }
+  var config = new Config(options, StateMachine);
+  build(cstor.prototype, config);
+  cstor.prototype._fsm.config = config; // convenience access to shared config without needing an instance
+  return cstor;
+}
+
+//-------------------------------------------------------------------------------------------------
+
+function apply(instance, options) {
+  var config = new Config(options, StateMachine);
+  build(instance, config);
+  instance._fsm();
+  return instance;
+}
+
+function build(target, config) {
+  if ((typeof target !== 'object') || Array.isArray(target))
+    throw Error('StateMachine can only be applied to objects');
+  plugin.build(target, config);
+  Object.defineProperties(target, PublicProperties);
+  mixin(target, PublicMethods);
+  mixin(target, config.methods);
+  config.allTransitions().forEach(function(transition) {
+    target[camelize(transition)] = function() {
+      return this._fsm.fire(transition, [].slice.call(arguments))
+    }
+  });
+  target._fsm = function() {
+    this._fsm = new JSM(this, config);
+    this._fsm.init(arguments);
+  }
+}
+
+//-----------------------------------------------------------------------------------------------
+
+StateMachine.version  = '3.0.1';
+StateMachine.factory  = factory;
+StateMachine.apply    = apply;
+StateMachine.defaults = {
+  wildcard: '*',
+  init: {
+    name: 'init',
+    from: 'none'
+  }
+}
+
+//===============================================================================================
+
+module.exports = StateMachine;
+
+
+/***/ }),
+/* 6 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+module.exports = function(message, transition, from, to, current) {
+  this.message    = message;
+  this.transition = transition;
+  this.from       = from;
+  this.to         = to;
+  this.current    = current;
+}
+
+
+/***/ })
+/******/ ]);
+});
+
+/***/ }),
+
 /***/ "./node_modules/lodash/lodash.js":
 /*!***************************************!*\
   !*** ./node_modules/lodash/lodash.js ***!
@@ -19039,6 +20173,285 @@ module.exports = {
 
 /***/ }),
 
+/***/ "./node_modules/loglevel/lib/loglevel.js":
+/*!***********************************************!*\
+  !*** ./node_modules/loglevel/lib/loglevel.js ***!
+  \***********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_RESULT__;/*
+* loglevel - https://github.com/pimterry/loglevel
+*
+* Copyright (c) 2013 Tim Perry
+* Licensed under the MIT license.
+*/
+(function (root, definition) {
+    "use strict";
+    if (true) {
+        !(__WEBPACK_AMD_DEFINE_FACTORY__ = (definition),
+				__WEBPACK_AMD_DEFINE_RESULT__ = (typeof __WEBPACK_AMD_DEFINE_FACTORY__ === 'function' ?
+				(__WEBPACK_AMD_DEFINE_FACTORY__.call(exports, __webpack_require__, exports, module)) :
+				__WEBPACK_AMD_DEFINE_FACTORY__),
+				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+    } else {}
+}(this, function () {
+    "use strict";
+
+    // Slightly dubious tricks to cut down minimized file size
+    var noop = function() {};
+    var undefinedType = "undefined";
+    var isIE = (typeof window !== undefinedType) && (
+        /Trident\/|MSIE /.test(window.navigator.userAgent)
+    );
+
+    var logMethods = [
+        "trace",
+        "debug",
+        "info",
+        "warn",
+        "error"
+    ];
+
+    // Cross-browser bind equivalent that works at least back to IE6
+    function bindMethod(obj, methodName) {
+        var method = obj[methodName];
+        if (typeof method.bind === 'function') {
+            return method.bind(obj);
+        } else {
+            try {
+                return Function.prototype.bind.call(method, obj);
+            } catch (e) {
+                // Missing bind shim or IE8 + Modernizr, fallback to wrapping
+                return function() {
+                    return Function.prototype.apply.apply(method, [obj, arguments]);
+                };
+            }
+        }
+    }
+
+    // Trace() doesn't print the message in IE, so for that case we need to wrap it
+    function traceForIE() {
+        if (console.log) {
+            if (console.log.apply) {
+                console.log.apply(console, arguments);
+            } else {
+                // In old IE, native console methods themselves don't have apply().
+                Function.prototype.apply.apply(console.log, [console, arguments]);
+            }
+        }
+        if (console.trace) console.trace();
+    }
+
+    // Build the best logging method possible for this env
+    // Wherever possible we want to bind, not wrap, to preserve stack traces
+    function realMethod(methodName) {
+        if (methodName === 'debug') {
+            methodName = 'log';
+        }
+
+        if (typeof console === undefinedType) {
+            return false; // No method possible, for now - fixed later by enableLoggingWhenConsoleArrives
+        } else if (methodName === 'trace' && isIE) {
+            return traceForIE;
+        } else if (console[methodName] !== undefined) {
+            return bindMethod(console, methodName);
+        } else if (console.log !== undefined) {
+            return bindMethod(console, 'log');
+        } else {
+            return noop;
+        }
+    }
+
+    // These private functions always need `this` to be set properly
+
+    function replaceLoggingMethods(level, loggerName) {
+        /*jshint validthis:true */
+        for (var i = 0; i < logMethods.length; i++) {
+            var methodName = logMethods[i];
+            this[methodName] = (i < level) ?
+                noop :
+                this.methodFactory(methodName, level, loggerName);
+        }
+
+        // Define log.log as an alias for log.debug
+        this.log = this.debug;
+    }
+
+    // In old IE versions, the console isn't present until you first open it.
+    // We build realMethod() replacements here that regenerate logging methods
+    function enableLoggingWhenConsoleArrives(methodName, level, loggerName) {
+        return function () {
+            if (typeof console !== undefinedType) {
+                replaceLoggingMethods.call(this, level, loggerName);
+                this[methodName].apply(this, arguments);
+            }
+        };
+    }
+
+    // By default, we use closely bound real methods wherever possible, and
+    // otherwise we wait for a console to appear, and then try again.
+    function defaultMethodFactory(methodName, level, loggerName) {
+        /*jshint validthis:true */
+        return realMethod(methodName) ||
+               enableLoggingWhenConsoleArrives.apply(this, arguments);
+    }
+
+    function Logger(name, defaultLevel, factory) {
+      var self = this;
+      var currentLevel;
+      var storageKey = "loglevel";
+      if (name) {
+        storageKey += ":" + name;
+      }
+
+      function persistLevelIfPossible(levelNum) {
+          var levelName = (logMethods[levelNum] || 'silent').toUpperCase();
+
+          if (typeof window === undefinedType) return;
+
+          // Use localStorage if available
+          try {
+              window.localStorage[storageKey] = levelName;
+              return;
+          } catch (ignore) {}
+
+          // Use session cookie as fallback
+          try {
+              window.document.cookie =
+                encodeURIComponent(storageKey) + "=" + levelName + ";";
+          } catch (ignore) {}
+      }
+
+      function getPersistedLevel() {
+          var storedLevel;
+
+          if (typeof window === undefinedType) return;
+
+          try {
+              storedLevel = window.localStorage[storageKey];
+          } catch (ignore) {}
+
+          // Fallback to cookies if local storage gives us nothing
+          if (typeof storedLevel === undefinedType) {
+              try {
+                  var cookie = window.document.cookie;
+                  var location = cookie.indexOf(
+                      encodeURIComponent(storageKey) + "=");
+                  if (location !== -1) {
+                      storedLevel = /^([^;]+)/.exec(cookie.slice(location))[1];
+                  }
+              } catch (ignore) {}
+          }
+
+          // If the stored level is not valid, treat it as if nothing was stored.
+          if (self.levels[storedLevel] === undefined) {
+              storedLevel = undefined;
+          }
+
+          return storedLevel;
+      }
+
+      /*
+       *
+       * Public logger API - see https://github.com/pimterry/loglevel for details
+       *
+       */
+
+      self.name = name;
+
+      self.levels = { "TRACE": 0, "DEBUG": 1, "INFO": 2, "WARN": 3,
+          "ERROR": 4, "SILENT": 5};
+
+      self.methodFactory = factory || defaultMethodFactory;
+
+      self.getLevel = function () {
+          return currentLevel;
+      };
+
+      self.setLevel = function (level, persist) {
+          if (typeof level === "string" && self.levels[level.toUpperCase()] !== undefined) {
+              level = self.levels[level.toUpperCase()];
+          }
+          if (typeof level === "number" && level >= 0 && level <= self.levels.SILENT) {
+              currentLevel = level;
+              if (persist !== false) {  // defaults to true
+                  persistLevelIfPossible(level);
+              }
+              replaceLoggingMethods.call(self, level, name);
+              if (typeof console === undefinedType && level < self.levels.SILENT) {
+                  return "No console available for logging";
+              }
+          } else {
+              throw "log.setLevel() called with invalid level: " + level;
+          }
+      };
+
+      self.setDefaultLevel = function (level) {
+          if (!getPersistedLevel()) {
+              self.setLevel(level, false);
+          }
+      };
+
+      self.enableAll = function(persist) {
+          self.setLevel(self.levels.TRACE, persist);
+      };
+
+      self.disableAll = function(persist) {
+          self.setLevel(self.levels.SILENT, persist);
+      };
+
+      // Initialize with the right level
+      var initialLevel = getPersistedLevel();
+      if (initialLevel == null) {
+          initialLevel = defaultLevel == null ? "WARN" : defaultLevel;
+      }
+      self.setLevel(initialLevel, false);
+    }
+
+    /*
+     *
+     * Top-level API
+     *
+     */
+
+    var defaultLogger = new Logger();
+
+    var _loggersByName = {};
+    defaultLogger.getLogger = function getLogger(name) {
+        if (typeof name !== "string" || name === "") {
+          throw new TypeError("You must supply a name when creating a logger.");
+        }
+
+        var logger = _loggersByName[name];
+        if (!logger) {
+          logger = _loggersByName[name] = new Logger(
+            name, defaultLogger.getLevel(), defaultLogger.methodFactory);
+        }
+        return logger;
+    };
+
+    // Grab the current global log variable in case of overwrite
+    var _log = (typeof window !== undefinedType) ? window.log : undefined;
+    defaultLogger.noConflict = function() {
+        if (typeof window !== undefinedType &&
+               window.log === defaultLogger) {
+            window.log = _log;
+        }
+
+        return defaultLogger;
+    };
+
+    defaultLogger.getLoggers = function getLoggers() {
+        return _loggersByName;
+    };
+
+    return defaultLogger;
+}));
+
+
+/***/ }),
+
 /***/ "./node_modules/object-assign/index.js":
 /*!*********************************************!*\
   !*** ./node_modules/object-assign/index.js ***!
@@ -19138,6 +20551,1467 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
+
+/***/ }),
+
+/***/ "./node_modules/operation-retrier/lib/backoff.js":
+/*!*******************************************************!*\
+  !*** ./node_modules/operation-retrier/lib/backoff.js ***!
+  \*******************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+function isDef(value) {
+    return value !== undefined && value !== null;
+}
+class Backoff extends events_1.EventEmitter {
+    constructor(options) {
+        super();
+        options = options || {};
+        if (isDef(options.initialDelay) && options.initialDelay < 1) {
+            throw new Error('The initial timeout must be equal to or greater than 1.');
+        }
+        else if (isDef(options.maxDelay) && options.maxDelay <= 1) {
+            throw new Error('The maximal timeout must be greater than 1.');
+        }
+        else if (isDef(options.randomisationFactor) &&
+            (options.randomisationFactor < 0 || options.randomisationFactor > 1)) {
+            throw new Error('The randomisation factor must be between 0 and 1.');
+        }
+        else if (isDef(options.factor) && options.factor <= 1) {
+            throw new Error(`Exponential factor should be greater than 1.`);
+        }
+        this.initialDelay = options.initialDelay || 100;
+        this.maxDelay = options.maxDelay || 10000;
+        if (this.maxDelay <= this.initialDelay) {
+            throw new Error('The maximal backoff delay must be greater than the initial backoff delay.');
+        }
+        this.randomisationFactor = options.randomisationFactor || 0;
+        this.factor = options.factor || 2;
+        this.maxNumberOfRetry = -1;
+        this.reset();
+    }
+    static exponential(options) {
+        return new Backoff(options);
+    }
+    backoff(err) {
+        if (this.timeoutID == null) {
+            if (this.backoffNumber === this.maxNumberOfRetry) {
+                this.emit('fail', err);
+                this.reset();
+            }
+            else {
+                this.backoffDelay = this.next();
+                this.timeoutID = setTimeout(this.onBackoff.bind(this), this.backoffDelay);
+                this.emit('backoff', this.backoffNumber, this.backoffDelay, err);
+            }
+        }
+    }
+    reset() {
+        this.backoffDelay = 0;
+        this.nextBackoffDelay = this.initialDelay;
+        this.backoffNumber = 0;
+        clearTimeout(this.timeoutID);
+        this.timeoutID = null;
+    }
+    failAfter(maxNumberOfRetry) {
+        if (maxNumberOfRetry <= 0) {
+            throw new Error(`Expected a maximum number of retry greater than 0 but got ${maxNumberOfRetry}`);
+        }
+        this.maxNumberOfRetry = maxNumberOfRetry;
+    }
+    next() {
+        this.backoffDelay = Math.min(this.nextBackoffDelay, this.maxDelay);
+        this.nextBackoffDelay = this.backoffDelay * this.factor;
+        let randomisationMultiple = 1 + Math.random() * this.randomisationFactor;
+        return Math.min(this.maxDelay, Math.round(this.backoffDelay * randomisationMultiple));
+    }
+    onBackoff() {
+        this.timeoutID = null;
+        this.emit('ready', this.backoffNumber, this.backoffDelay);
+        this.backoffNumber++;
+    }
+}
+exports.Backoff = Backoff;
+exports.default = Backoff;
+//# sourceMappingURL=backoff.js.map
+
+/***/ }),
+
+/***/ "./node_modules/operation-retrier/lib/index.js":
+/*!*****************************************************!*\
+  !*** ./node_modules/operation-retrier/lib/index.js ***!
+  \*****************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const retrier_1 = __webpack_require__(/*! ./retrier */ "./node_modules/operation-retrier/lib/retrier.js");
+exports.Retrier = retrier_1.Retrier;
+const backoff_1 = __webpack_require__(/*! ./backoff */ "./node_modules/operation-retrier/lib/backoff.js");
+exports.Backoff = backoff_1.Backoff;
+exports.default = retrier_1.Retrier;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ "./node_modules/operation-retrier/lib/retrier.js":
+/*!*******************************************************!*\
+  !*** ./node_modules/operation-retrier/lib/retrier.js ***!
+  \*******************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+/**
+ * Provides retrier service
+ */
+class Retrier extends events_1.EventEmitter {
+    /**
+     * Creates a new Retrier instance
+     */
+    constructor(options) {
+        super();
+        this.minDelay = options.min;
+        this.maxDelay = options.max;
+        this.initialDelay = options.initial || 0;
+        this.maxAttemptsCount = options.maxAttemptsCount || 0;
+        this.maxAttemptsTime = options.maxAttemptsTime || 0;
+        this.randomness = options.randomness || 0;
+        this.inProgress = false;
+        this.attemptNum = 0;
+        this.prevDelay = 0;
+        this.currDelay = 0;
+    }
+    attempt() {
+        clearTimeout(this.timeout);
+        this.attemptNum++;
+        this.timeout = null;
+        this.emit('attempt', this);
+    }
+    nextDelay(delayOverride) {
+        if (typeof delayOverride === 'number') {
+            this.prevDelay = 0;
+            this.currDelay = delayOverride;
+            return delayOverride;
+        }
+        if (this.attemptNum == 0) {
+            return this.initialDelay;
+        }
+        if (this.attemptNum == 1) {
+            this.currDelay = this.minDelay;
+            return this.currDelay;
+        }
+        this.prevDelay = this.currDelay;
+        let delay = this.currDelay + this.prevDelay;
+        if (this.maxDelay && delay > this.maxDelay) {
+            this.currDelay = this.maxDelay;
+            delay = this.maxDelay;
+        }
+        this.currDelay = delay;
+        return delay;
+    }
+    randomize(delay) {
+        let area = delay * this.randomness;
+        let corr = Math.round(Math.random() * area * 2 - area);
+        return Math.max(0, delay + corr);
+    }
+    scheduleAttempt(delayOverride) {
+        if (this.maxAttemptsCount && this.attemptNum >= this.maxAttemptsCount) {
+            this.cleanup();
+            this.emit('failed', new Error('Maximum attempt count limit reached'));
+            this.reject(new Error('Maximum attempt count reached'));
+            return;
+        }
+        let delay = this.nextDelay(delayOverride);
+        delay = this.randomize(delay);
+        if (this.maxAttemptsTime && (this.startTimestamp + this.maxAttemptsTime < Date.now() + delay)) {
+            this.cleanup();
+            this.emit('failed', new Error('Maximum attempt time limit reached'));
+            this.reject(new Error('Maximum attempt time limit reached'));
+            return;
+        }
+        this.timeout = setTimeout(() => this.attempt(), delay);
+    }
+    cleanup() {
+        clearTimeout(this.timeout);
+        this.timeout = null;
+        this.inProgress = false;
+        this.attemptNum = 0;
+        this.prevDelay = 0;
+        this.currDelay = 0;
+    }
+    start() {
+        if (this.inProgress) {
+            throw new Error('Retrier is already in progress');
+        }
+        this.inProgress = true;
+        return new Promise((resolve, reject) => {
+            this.resolve = resolve;
+            this.reject = reject;
+            this.startTimestamp = Date.now();
+            this.scheduleAttempt(this.initialDelay);
+        });
+    }
+    cancel() {
+        if (this.timeout) {
+            clearTimeout(this.timeout);
+            this.timeout = null;
+            this.inProgress = false;
+            this.emit('cancelled');
+            this.reject(new Error('Cancelled'));
+        }
+    }
+    succeeded(arg) {
+        this.emit('succeeded', arg);
+        this.resolve(arg);
+    }
+    failed(err, nextAttemptDelayOverride) {
+        if (this.timeout) {
+            throw new Error('Retrier attempt is already in progress');
+        }
+        this.scheduleAttempt(nextAttemptDelayOverride);
+    }
+    run(handler) {
+        this.on('attempt', () => {
+            handler().then(v => this.succeeded(v)).catch(e => this.failed(e));
+        });
+        return this.start();
+    }
+}
+exports.Retrier = Retrier;
+exports.default = Retrier;
+//# sourceMappingURL=retrier.js.map
+
+/***/ }),
+
+/***/ "./node_modules/platform/platform.js":
+/*!*******************************************!*\
+  !*** ./node_modules/platform/platform.js ***!
+  \*******************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+/* WEBPACK VAR INJECTION */(function(module, global) {var __WEBPACK_AMD_DEFINE_RESULT__;/*!
+ * Platform.js <https://mths.be/platform>
+ * Copyright 2014-2018 Benjamin Tan <https://bnjmnt4n.now.sh/>
+ * Copyright 2011-2013 John-David Dalton <http://allyoucanleet.com/>
+ * Available under MIT license <https://mths.be/mit>
+ */
+;(function() {
+  'use strict';
+
+  /** Used to determine if values are of the language type `Object`. */
+  var objectTypes = {
+    'function': true,
+    'object': true
+  };
+
+  /** Used as a reference to the global object. */
+  var root = (objectTypes[typeof window] && window) || this;
+
+  /** Backup possible global object. */
+  var oldRoot = root;
+
+  /** Detect free variable `exports`. */
+  var freeExports = objectTypes[typeof exports] && exports;
+
+  /** Detect free variable `module`. */
+  var freeModule = objectTypes[typeof module] && module && !module.nodeType && module;
+
+  /** Detect free variable `global` from Node.js or Browserified code and use it as `root`. */
+  var freeGlobal = freeExports && freeModule && typeof global == 'object' && global;
+  if (freeGlobal && (freeGlobal.global === freeGlobal || freeGlobal.window === freeGlobal || freeGlobal.self === freeGlobal)) {
+    root = freeGlobal;
+  }
+
+  /**
+   * Used as the maximum length of an array-like object.
+   * See the [ES6 spec](http://people.mozilla.org/~jorendorff/es6-draft.html#sec-tolength)
+   * for more details.
+   */
+  var maxSafeInteger = Math.pow(2, 53) - 1;
+
+  /** Regular expression to detect Opera. */
+  var reOpera = /\bOpera/;
+
+  /** Possible global object. */
+  var thisBinding = this;
+
+  /** Used for native method references. */
+  var objectProto = Object.prototype;
+
+  /** Used to check for own properties of an object. */
+  var hasOwnProperty = objectProto.hasOwnProperty;
+
+  /** Used to resolve the internal `[[Class]]` of values. */
+  var toString = objectProto.toString;
+
+  /*--------------------------------------------------------------------------*/
+
+  /**
+   * Capitalizes a string value.
+   *
+   * @private
+   * @param {string} string The string to capitalize.
+   * @returns {string} The capitalized string.
+   */
+  function capitalize(string) {
+    string = String(string);
+    return string.charAt(0).toUpperCase() + string.slice(1);
+  }
+
+  /**
+   * A utility function to clean up the OS name.
+   *
+   * @private
+   * @param {string} os The OS name to clean up.
+   * @param {string} [pattern] A `RegExp` pattern matching the OS name.
+   * @param {string} [label] A label for the OS.
+   */
+  function cleanupOS(os, pattern, label) {
+    // Platform tokens are defined at:
+    // http://msdn.microsoft.com/en-us/library/ms537503(VS.85).aspx
+    // http://web.archive.org/web/20081122053950/http://msdn.microsoft.com/en-us/library/ms537503(VS.85).aspx
+    var data = {
+      '10.0': '10',
+      '6.4':  '10 Technical Preview',
+      '6.3':  '8.1',
+      '6.2':  '8',
+      '6.1':  'Server 2008 R2 / 7',
+      '6.0':  'Server 2008 / Vista',
+      '5.2':  'Server 2003 / XP 64-bit',
+      '5.1':  'XP',
+      '5.01': '2000 SP1',
+      '5.0':  '2000',
+      '4.0':  'NT',
+      '4.90': 'ME'
+    };
+    // Detect Windows version from platform tokens.
+    if (pattern && label && /^Win/i.test(os) && !/^Windows Phone /i.test(os) &&
+        (data = data[/[\d.]+$/.exec(os)])) {
+      os = 'Windows ' + data;
+    }
+    // Correct character case and cleanup string.
+    os = String(os);
+
+    if (pattern && label) {
+      os = os.replace(RegExp(pattern, 'i'), label);
+    }
+
+    os = format(
+      os.replace(/ ce$/i, ' CE')
+        .replace(/\bhpw/i, 'web')
+        .replace(/\bMacintosh\b/, 'Mac OS')
+        .replace(/_PowerPC\b/i, ' OS')
+        .replace(/\b(OS X) [^ \d]+/i, '$1')
+        .replace(/\bMac (OS X)\b/, '$1')
+        .replace(/\/(\d)/, ' $1')
+        .replace(/_/g, '.')
+        .replace(/(?: BePC|[ .]*fc[ \d.]+)$/i, '')
+        .replace(/\bx86\.64\b/gi, 'x86_64')
+        .replace(/\b(Windows Phone) OS\b/, '$1')
+        .replace(/\b(Chrome OS \w+) [\d.]+\b/, '$1')
+        .split(' on ')[0]
+    );
+
+    return os;
+  }
+
+  /**
+   * An iteration utility for arrays and objects.
+   *
+   * @private
+   * @param {Array|Object} object The object to iterate over.
+   * @param {Function} callback The function called per iteration.
+   */
+  function each(object, callback) {
+    var index = -1,
+        length = object ? object.length : 0;
+
+    if (typeof length == 'number' && length > -1 && length <= maxSafeInteger) {
+      while (++index < length) {
+        callback(object[index], index, object);
+      }
+    } else {
+      forOwn(object, callback);
+    }
+  }
+
+  /**
+   * Trim and conditionally capitalize string values.
+   *
+   * @private
+   * @param {string} string The string to format.
+   * @returns {string} The formatted string.
+   */
+  function format(string) {
+    string = trim(string);
+    return /^(?:webOS|i(?:OS|P))/.test(string)
+      ? string
+      : capitalize(string);
+  }
+
+  /**
+   * Iterates over an object's own properties, executing the `callback` for each.
+   *
+   * @private
+   * @param {Object} object The object to iterate over.
+   * @param {Function} callback The function executed per own property.
+   */
+  function forOwn(object, callback) {
+    for (var key in object) {
+      if (hasOwnProperty.call(object, key)) {
+        callback(object[key], key, object);
+      }
+    }
+  }
+
+  /**
+   * Gets the internal `[[Class]]` of a value.
+   *
+   * @private
+   * @param {*} value The value.
+   * @returns {string} The `[[Class]]`.
+   */
+  function getClassOf(value) {
+    return value == null
+      ? capitalize(value)
+      : toString.call(value).slice(8, -1);
+  }
+
+  /**
+   * Host objects can return type values that are different from their actual
+   * data type. The objects we are concerned with usually return non-primitive
+   * types of "object", "function", or "unknown".
+   *
+   * @private
+   * @param {*} object The owner of the property.
+   * @param {string} property The property to check.
+   * @returns {boolean} Returns `true` if the property value is a non-primitive, else `false`.
+   */
+  function isHostType(object, property) {
+    var type = object != null ? typeof object[property] : 'number';
+    return !/^(?:boolean|number|string|undefined)$/.test(type) &&
+      (type == 'object' ? !!object[property] : true);
+  }
+
+  /**
+   * Prepares a string for use in a `RegExp` by making hyphens and spaces optional.
+   *
+   * @private
+   * @param {string} string The string to qualify.
+   * @returns {string} The qualified string.
+   */
+  function qualify(string) {
+    return String(string).replace(/([ -])(?!$)/g, '$1?');
+  }
+
+  /**
+   * A bare-bones `Array#reduce` like utility function.
+   *
+   * @private
+   * @param {Array} array The array to iterate over.
+   * @param {Function} callback The function called per iteration.
+   * @returns {*} The accumulated result.
+   */
+  function reduce(array, callback) {
+    var accumulator = null;
+    each(array, function(value, index) {
+      accumulator = callback(accumulator, value, index, array);
+    });
+    return accumulator;
+  }
+
+  /**
+   * Removes leading and trailing whitespace from a string.
+   *
+   * @private
+   * @param {string} string The string to trim.
+   * @returns {string} The trimmed string.
+   */
+  function trim(string) {
+    return String(string).replace(/^ +| +$/g, '');
+  }
+
+  /*--------------------------------------------------------------------------*/
+
+  /**
+   * Creates a new platform object.
+   *
+   * @memberOf platform
+   * @param {Object|string} [ua=navigator.userAgent] The user agent string or
+   *  context object.
+   * @returns {Object} A platform object.
+   */
+  function parse(ua) {
+
+    /** The environment context object. */
+    var context = root;
+
+    /** Used to flag when a custom context is provided. */
+    var isCustomContext = ua && typeof ua == 'object' && getClassOf(ua) != 'String';
+
+    // Juggle arguments.
+    if (isCustomContext) {
+      context = ua;
+      ua = null;
+    }
+
+    /** Browser navigator object. */
+    var nav = context.navigator || {};
+
+    /** Browser user agent string. */
+    var userAgent = nav.userAgent || '';
+
+    ua || (ua = userAgent);
+
+    /** Used to flag when `thisBinding` is the [ModuleScope]. */
+    var isModuleScope = isCustomContext || thisBinding == oldRoot;
+
+    /** Used to detect if browser is like Chrome. */
+    var likeChrome = isCustomContext
+      ? !!nav.likeChrome
+      : /\bChrome\b/.test(ua) && !/internal|\n/i.test(toString.toString());
+
+    /** Internal `[[Class]]` value shortcuts. */
+    var objectClass = 'Object',
+        airRuntimeClass = isCustomContext ? objectClass : 'ScriptBridgingProxyObject',
+        enviroClass = isCustomContext ? objectClass : 'Environment',
+        javaClass = (isCustomContext && context.java) ? 'JavaPackage' : getClassOf(context.java),
+        phantomClass = isCustomContext ? objectClass : 'RuntimeObject';
+
+    /** Detect Java environments. */
+    var java = /\bJava/.test(javaClass) && context.java;
+
+    /** Detect Rhino. */
+    var rhino = java && getClassOf(context.environment) == enviroClass;
+
+    /** A character to represent alpha. */
+    var alpha = java ? 'a' : '\u03b1';
+
+    /** A character to represent beta. */
+    var beta = java ? 'b' : '\u03b2';
+
+    /** Browser document object. */
+    var doc = context.document || {};
+
+    /**
+     * Detect Opera browser (Presto-based).
+     * http://www.howtocreate.co.uk/operaStuff/operaObject.html
+     * http://dev.opera.com/articles/view/opera-mini-web-content-authoring-guidelines/#operamini
+     */
+    var opera = context.operamini || context.opera;
+
+    /** Opera `[[Class]]`. */
+    var operaClass = reOpera.test(operaClass = (isCustomContext && opera) ? opera['[[Class]]'] : getClassOf(opera))
+      ? operaClass
+      : (opera = null);
+
+    /*------------------------------------------------------------------------*/
+
+    /** Temporary variable used over the script's lifetime. */
+    var data;
+
+    /** The CPU architecture. */
+    var arch = ua;
+
+    /** Platform description array. */
+    var description = [];
+
+    /** Platform alpha/beta indicator. */
+    var prerelease = null;
+
+    /** A flag to indicate that environment features should be used to resolve the platform. */
+    var useFeatures = ua == userAgent;
+
+    /** The browser/environment version. */
+    var version = useFeatures && opera && typeof opera.version == 'function' && opera.version();
+
+    /** A flag to indicate if the OS ends with "/ Version" */
+    var isSpecialCasedOS;
+
+    /* Detectable layout engines (order is important). */
+    var layout = getLayout([
+      { 'label': 'EdgeHTML', 'pattern': 'Edge' },
+      'Trident',
+      { 'label': 'WebKit', 'pattern': 'AppleWebKit' },
+      'iCab',
+      'Presto',
+      'NetFront',
+      'Tasman',
+      'KHTML',
+      'Gecko'
+    ]);
+
+    /* Detectable browser names (order is important). */
+    var name = getName([
+      'Adobe AIR',
+      'Arora',
+      'Avant Browser',
+      'Breach',
+      'Camino',
+      'Electron',
+      'Epiphany',
+      'Fennec',
+      'Flock',
+      'Galeon',
+      'GreenBrowser',
+      'iCab',
+      'Iceweasel',
+      'K-Meleon',
+      'Konqueror',
+      'Lunascape',
+      'Maxthon',
+      { 'label': 'Microsoft Edge', 'pattern': 'Edge' },
+      'Midori',
+      'Nook Browser',
+      'PaleMoon',
+      'PhantomJS',
+      'Raven',
+      'Rekonq',
+      'RockMelt',
+      { 'label': 'Samsung Internet', 'pattern': 'SamsungBrowser' },
+      'SeaMonkey',
+      { 'label': 'Silk', 'pattern': '(?:Cloud9|Silk-Accelerated)' },
+      'Sleipnir',
+      'SlimBrowser',
+      { 'label': 'SRWare Iron', 'pattern': 'Iron' },
+      'Sunrise',
+      'Swiftfox',
+      'Waterfox',
+      'WebPositive',
+      'Opera Mini',
+      { 'label': 'Opera Mini', 'pattern': 'OPiOS' },
+      'Opera',
+      { 'label': 'Opera', 'pattern': 'OPR' },
+      'Chrome',
+      { 'label': 'Chrome Mobile', 'pattern': '(?:CriOS|CrMo)' },
+      { 'label': 'Firefox', 'pattern': '(?:Firefox|Minefield)' },
+      { 'label': 'Firefox for iOS', 'pattern': 'FxiOS' },
+      { 'label': 'IE', 'pattern': 'IEMobile' },
+      { 'label': 'IE', 'pattern': 'MSIE' },
+      'Safari'
+    ]);
+
+    /* Detectable products (order is important). */
+    var product = getProduct([
+      { 'label': 'BlackBerry', 'pattern': 'BB10' },
+      'BlackBerry',
+      { 'label': 'Galaxy S', 'pattern': 'GT-I9000' },
+      { 'label': 'Galaxy S2', 'pattern': 'GT-I9100' },
+      { 'label': 'Galaxy S3', 'pattern': 'GT-I9300' },
+      { 'label': 'Galaxy S4', 'pattern': 'GT-I9500' },
+      { 'label': 'Galaxy S5', 'pattern': 'SM-G900' },
+      { 'label': 'Galaxy S6', 'pattern': 'SM-G920' },
+      { 'label': 'Galaxy S6 Edge', 'pattern': 'SM-G925' },
+      { 'label': 'Galaxy S7', 'pattern': 'SM-G930' },
+      { 'label': 'Galaxy S7 Edge', 'pattern': 'SM-G935' },
+      'Google TV',
+      'Lumia',
+      'iPad',
+      'iPod',
+      'iPhone',
+      'Kindle',
+      { 'label': 'Kindle Fire', 'pattern': '(?:Cloud9|Silk-Accelerated)' },
+      'Nexus',
+      'Nook',
+      'PlayBook',
+      'PlayStation Vita',
+      'PlayStation',
+      'TouchPad',
+      'Transformer',
+      { 'label': 'Wii U', 'pattern': 'WiiU' },
+      'Wii',
+      'Xbox One',
+      { 'label': 'Xbox 360', 'pattern': 'Xbox' },
+      'Xoom'
+    ]);
+
+    /* Detectable manufacturers. */
+    var manufacturer = getManufacturer({
+      'Apple': { 'iPad': 1, 'iPhone': 1, 'iPod': 1 },
+      'Archos': {},
+      'Amazon': { 'Kindle': 1, 'Kindle Fire': 1 },
+      'Asus': { 'Transformer': 1 },
+      'Barnes & Noble': { 'Nook': 1 },
+      'BlackBerry': { 'PlayBook': 1 },
+      'Google': { 'Google TV': 1, 'Nexus': 1 },
+      'HP': { 'TouchPad': 1 },
+      'HTC': {},
+      'LG': {},
+      'Microsoft': { 'Xbox': 1, 'Xbox One': 1 },
+      'Motorola': { 'Xoom': 1 },
+      'Nintendo': { 'Wii U': 1,  'Wii': 1 },
+      'Nokia': { 'Lumia': 1 },
+      'Samsung': { 'Galaxy S': 1, 'Galaxy S2': 1, 'Galaxy S3': 1, 'Galaxy S4': 1 },
+      'Sony': { 'PlayStation': 1, 'PlayStation Vita': 1 }
+    });
+
+    /* Detectable operating systems (order is important). */
+    var os = getOS([
+      'Windows Phone',
+      'Android',
+      'CentOS',
+      { 'label': 'Chrome OS', 'pattern': 'CrOS' },
+      'Debian',
+      'Fedora',
+      'FreeBSD',
+      'Gentoo',
+      'Haiku',
+      'Kubuntu',
+      'Linux Mint',
+      'OpenBSD',
+      'Red Hat',
+      'SuSE',
+      'Ubuntu',
+      'Xubuntu',
+      'Cygwin',
+      'Symbian OS',
+      'hpwOS',
+      'webOS ',
+      'webOS',
+      'Tablet OS',
+      'Tizen',
+      'Linux',
+      'Mac OS X',
+      'Macintosh',
+      'Mac',
+      'Windows 98;',
+      'Windows '
+    ]);
+
+    /*------------------------------------------------------------------------*/
+
+    /**
+     * Picks the layout engine from an array of guesses.
+     *
+     * @private
+     * @param {Array} guesses An array of guesses.
+     * @returns {null|string} The detected layout engine.
+     */
+    function getLayout(guesses) {
+      return reduce(guesses, function(result, guess) {
+        return result || RegExp('\\b' + (
+          guess.pattern || qualify(guess)
+        ) + '\\b', 'i').exec(ua) && (guess.label || guess);
+      });
+    }
+
+    /**
+     * Picks the manufacturer from an array of guesses.
+     *
+     * @private
+     * @param {Array} guesses An object of guesses.
+     * @returns {null|string} The detected manufacturer.
+     */
+    function getManufacturer(guesses) {
+      return reduce(guesses, function(result, value, key) {
+        // Lookup the manufacturer by product or scan the UA for the manufacturer.
+        return result || (
+          value[product] ||
+          value[/^[a-z]+(?: +[a-z]+\b)*/i.exec(product)] ||
+          RegExp('\\b' + qualify(key) + '(?:\\b|\\w*\\d)', 'i').exec(ua)
+        ) && key;
+      });
+    }
+
+    /**
+     * Picks the browser name from an array of guesses.
+     *
+     * @private
+     * @param {Array} guesses An array of guesses.
+     * @returns {null|string} The detected browser name.
+     */
+    function getName(guesses) {
+      return reduce(guesses, function(result, guess) {
+        return result || RegExp('\\b' + (
+          guess.pattern || qualify(guess)
+        ) + '\\b', 'i').exec(ua) && (guess.label || guess);
+      });
+    }
+
+    /**
+     * Picks the OS name from an array of guesses.
+     *
+     * @private
+     * @param {Array} guesses An array of guesses.
+     * @returns {null|string} The detected OS name.
+     */
+    function getOS(guesses) {
+      return reduce(guesses, function(result, guess) {
+        var pattern = guess.pattern || qualify(guess);
+        if (!result && (result =
+              RegExp('\\b' + pattern + '(?:/[\\d.]+|[ \\w.]*)', 'i').exec(ua)
+            )) {
+          result = cleanupOS(result, pattern, guess.label || guess);
+        }
+        return result;
+      });
+    }
+
+    /**
+     * Picks the product name from an array of guesses.
+     *
+     * @private
+     * @param {Array} guesses An array of guesses.
+     * @returns {null|string} The detected product name.
+     */
+    function getProduct(guesses) {
+      return reduce(guesses, function(result, guess) {
+        var pattern = guess.pattern || qualify(guess);
+        if (!result && (result =
+              RegExp('\\b' + pattern + ' *\\d+[.\\w_]*', 'i').exec(ua) ||
+              RegExp('\\b' + pattern + ' *\\w+-[\\w]*', 'i').exec(ua) ||
+              RegExp('\\b' + pattern + '(?:; *(?:[a-z]+[_-])?[a-z]+\\d+|[^ ();-]*)', 'i').exec(ua)
+            )) {
+          // Split by forward slash and append product version if needed.
+          if ((result = String((guess.label && !RegExp(pattern, 'i').test(guess.label)) ? guess.label : result).split('/'))[1] && !/[\d.]+/.test(result[0])) {
+            result[0] += ' ' + result[1];
+          }
+          // Correct character case and cleanup string.
+          guess = guess.label || guess;
+          result = format(result[0]
+            .replace(RegExp(pattern, 'i'), guess)
+            .replace(RegExp('; *(?:' + guess + '[_-])?', 'i'), ' ')
+            .replace(RegExp('(' + guess + ')[-_.]?(\\w)', 'i'), '$1 $2'));
+        }
+        return result;
+      });
+    }
+
+    /**
+     * Resolves the version using an array of UA patterns.
+     *
+     * @private
+     * @param {Array} patterns An array of UA patterns.
+     * @returns {null|string} The detected version.
+     */
+    function getVersion(patterns) {
+      return reduce(patterns, function(result, pattern) {
+        return result || (RegExp(pattern +
+          '(?:-[\\d.]+/|(?: for [\\w-]+)?[ /-])([\\d.]+[^ ();/_-]*)', 'i').exec(ua) || 0)[1] || null;
+      });
+    }
+
+    /**
+     * Returns `platform.description` when the platform object is coerced to a string.
+     *
+     * @name toString
+     * @memberOf platform
+     * @returns {string} Returns `platform.description` if available, else an empty string.
+     */
+    function toStringPlatform() {
+      return this.description || '';
+    }
+
+    /*------------------------------------------------------------------------*/
+
+    // Convert layout to an array so we can add extra details.
+    layout && (layout = [layout]);
+
+    // Detect product names that contain their manufacturer's name.
+    if (manufacturer && !product) {
+      product = getProduct([manufacturer]);
+    }
+    // Clean up Google TV.
+    if ((data = /\bGoogle TV\b/.exec(product))) {
+      product = data[0];
+    }
+    // Detect simulators.
+    if (/\bSimulator\b/i.test(ua)) {
+      product = (product ? product + ' ' : '') + 'Simulator';
+    }
+    // Detect Opera Mini 8+ running in Turbo/Uncompressed mode on iOS.
+    if (name == 'Opera Mini' && /\bOPiOS\b/.test(ua)) {
+      description.push('running in Turbo/Uncompressed mode');
+    }
+    // Detect IE Mobile 11.
+    if (name == 'IE' && /\blike iPhone OS\b/.test(ua)) {
+      data = parse(ua.replace(/like iPhone OS/, ''));
+      manufacturer = data.manufacturer;
+      product = data.product;
+    }
+    // Detect iOS.
+    else if (/^iP/.test(product)) {
+      name || (name = 'Safari');
+      os = 'iOS' + ((data = / OS ([\d_]+)/i.exec(ua))
+        ? ' ' + data[1].replace(/_/g, '.')
+        : '');
+    }
+    // Detect Kubuntu.
+    else if (name == 'Konqueror' && !/buntu/i.test(os)) {
+      os = 'Kubuntu';
+    }
+    // Detect Android browsers.
+    else if ((manufacturer && manufacturer != 'Google' &&
+        ((/Chrome/.test(name) && !/\bMobile Safari\b/i.test(ua)) || /\bVita\b/.test(product))) ||
+        (/\bAndroid\b/.test(os) && /^Chrome/.test(name) && /\bVersion\//i.test(ua))) {
+      name = 'Android Browser';
+      os = /\bAndroid\b/.test(os) ? os : 'Android';
+    }
+    // Detect Silk desktop/accelerated modes.
+    else if (name == 'Silk') {
+      if (!/\bMobi/i.test(ua)) {
+        os = 'Android';
+        description.unshift('desktop mode');
+      }
+      if (/Accelerated *= *true/i.test(ua)) {
+        description.unshift('accelerated');
+      }
+    }
+    // Detect PaleMoon identifying as Firefox.
+    else if (name == 'PaleMoon' && (data = /\bFirefox\/([\d.]+)\b/.exec(ua))) {
+      description.push('identifying as Firefox ' + data[1]);
+    }
+    // Detect Firefox OS and products running Firefox.
+    else if (name == 'Firefox' && (data = /\b(Mobile|Tablet|TV)\b/i.exec(ua))) {
+      os || (os = 'Firefox OS');
+      product || (product = data[1]);
+    }
+    // Detect false positives for Firefox/Safari.
+    else if (!name || (data = !/\bMinefield\b/i.test(ua) && /\b(?:Firefox|Safari)\b/.exec(name))) {
+      // Escape the `/` for Firefox 1.
+      if (name && !product && /[\/,]|^[^(]+?\)/.test(ua.slice(ua.indexOf(data + '/') + 8))) {
+        // Clear name of false positives.
+        name = null;
+      }
+      // Reassign a generic name.
+      if ((data = product || manufacturer || os) &&
+          (product || manufacturer || /\b(?:Android|Symbian OS|Tablet OS|webOS)\b/.test(os))) {
+        name = /[a-z]+(?: Hat)?/i.exec(/\bAndroid\b/.test(os) ? os : data) + ' Browser';
+      }
+    }
+    // Add Chrome version to description for Electron.
+    else if (name == 'Electron' && (data = (/\bChrome\/([\d.]+)\b/.exec(ua) || 0)[1])) {
+      description.push('Chromium ' + data);
+    }
+    // Detect non-Opera (Presto-based) versions (order is important).
+    if (!version) {
+      version = getVersion([
+        '(?:Cloud9|CriOS|CrMo|Edge|FxiOS|IEMobile|Iron|Opera ?Mini|OPiOS|OPR|Raven|SamsungBrowser|Silk(?!/[\\d.]+$))',
+        'Version',
+        qualify(name),
+        '(?:Firefox|Minefield|NetFront)'
+      ]);
+    }
+    // Detect stubborn layout engines.
+    if ((data =
+          layout == 'iCab' && parseFloat(version) > 3 && 'WebKit' ||
+          /\bOpera\b/.test(name) && (/\bOPR\b/.test(ua) ? 'Blink' : 'Presto') ||
+          /\b(?:Midori|Nook|Safari)\b/i.test(ua) && !/^(?:Trident|EdgeHTML)$/.test(layout) && 'WebKit' ||
+          !layout && /\bMSIE\b/i.test(ua) && (os == 'Mac OS' ? 'Tasman' : 'Trident') ||
+          layout == 'WebKit' && /\bPlayStation\b(?! Vita\b)/i.test(name) && 'NetFront'
+        )) {
+      layout = [data];
+    }
+    // Detect Windows Phone 7 desktop mode.
+    if (name == 'IE' && (data = (/; *(?:XBLWP|ZuneWP)(\d+)/i.exec(ua) || 0)[1])) {
+      name += ' Mobile';
+      os = 'Windows Phone ' + (/\+$/.test(data) ? data : data + '.x');
+      description.unshift('desktop mode');
+    }
+    // Detect Windows Phone 8.x desktop mode.
+    else if (/\bWPDesktop\b/i.test(ua)) {
+      name = 'IE Mobile';
+      os = 'Windows Phone 8.x';
+      description.unshift('desktop mode');
+      version || (version = (/\brv:([\d.]+)/.exec(ua) || 0)[1]);
+    }
+    // Detect IE 11 identifying as other browsers.
+    else if (name != 'IE' && layout == 'Trident' && (data = /\brv:([\d.]+)/.exec(ua))) {
+      if (name) {
+        description.push('identifying as ' + name + (version ? ' ' + version : ''));
+      }
+      name = 'IE';
+      version = data[1];
+    }
+    // Leverage environment features.
+    if (useFeatures) {
+      // Detect server-side environments.
+      // Rhino has a global function while others have a global object.
+      if (isHostType(context, 'global')) {
+        if (java) {
+          data = java.lang.System;
+          arch = data.getProperty('os.arch');
+          os = os || data.getProperty('os.name') + ' ' + data.getProperty('os.version');
+        }
+        if (rhino) {
+          try {
+            version = context.require('ringo/engine').version.join('.');
+            name = 'RingoJS';
+          } catch(e) {
+            if ((data = context.system) && data.global.system == context.system) {
+              name = 'Narwhal';
+              os || (os = data[0].os || null);
+            }
+          }
+          if (!name) {
+            name = 'Rhino';
+          }
+        }
+        else if (
+          typeof context.process == 'object' && !context.process.browser &&
+          (data = context.process)
+        ) {
+          if (typeof data.versions == 'object') {
+            if (typeof data.versions.electron == 'string') {
+              description.push('Node ' + data.versions.node);
+              name = 'Electron';
+              version = data.versions.electron;
+            } else if (typeof data.versions.nw == 'string') {
+              description.push('Chromium ' + version, 'Node ' + data.versions.node);
+              name = 'NW.js';
+              version = data.versions.nw;
+            }
+          }
+          if (!name) {
+            name = 'Node.js';
+            arch = data.arch;
+            os = data.platform;
+            version = /[\d.]+/.exec(data.version);
+            version = version ? version[0] : null;
+          }
+        }
+      }
+      // Detect Adobe AIR.
+      else if (getClassOf((data = context.runtime)) == airRuntimeClass) {
+        name = 'Adobe AIR';
+        os = data.flash.system.Capabilities.os;
+      }
+      // Detect PhantomJS.
+      else if (getClassOf((data = context.phantom)) == phantomClass) {
+        name = 'PhantomJS';
+        version = (data = data.version || null) && (data.major + '.' + data.minor + '.' + data.patch);
+      }
+      // Detect IE compatibility modes.
+      else if (typeof doc.documentMode == 'number' && (data = /\bTrident\/(\d+)/i.exec(ua))) {
+        // We're in compatibility mode when the Trident version + 4 doesn't
+        // equal the document mode.
+        version = [version, doc.documentMode];
+        if ((data = +data[1] + 4) != version[1]) {
+          description.push('IE ' + version[1] + ' mode');
+          layout && (layout[1] = '');
+          version[1] = data;
+        }
+        version = name == 'IE' ? String(version[1].toFixed(1)) : version[0];
+      }
+      // Detect IE 11 masking as other browsers.
+      else if (typeof doc.documentMode == 'number' && /^(?:Chrome|Firefox)\b/.test(name)) {
+        description.push('masking as ' + name + ' ' + version);
+        name = 'IE';
+        version = '11.0';
+        layout = ['Trident'];
+        os = 'Windows';
+      }
+      os = os && format(os);
+    }
+    // Detect prerelease phases.
+    if (version && (data =
+          /(?:[ab]|dp|pre|[ab]\d+pre)(?:\d+\+?)?$/i.exec(version) ||
+          /(?:alpha|beta)(?: ?\d)?/i.exec(ua + ';' + (useFeatures && nav.appMinorVersion)) ||
+          /\bMinefield\b/i.test(ua) && 'a'
+        )) {
+      prerelease = /b/i.test(data) ? 'beta' : 'alpha';
+      version = version.replace(RegExp(data + '\\+?$'), '') +
+        (prerelease == 'beta' ? beta : alpha) + (/\d+\+?/.exec(data) || '');
+    }
+    // Detect Firefox Mobile.
+    if (name == 'Fennec' || name == 'Firefox' && /\b(?:Android|Firefox OS)\b/.test(os)) {
+      name = 'Firefox Mobile';
+    }
+    // Obscure Maxthon's unreliable version.
+    else if (name == 'Maxthon' && version) {
+      version = version.replace(/\.[\d.]+/, '.x');
+    }
+    // Detect Xbox 360 and Xbox One.
+    else if (/\bXbox\b/i.test(product)) {
+      if (product == 'Xbox 360') {
+        os = null;
+      }
+      if (product == 'Xbox 360' && /\bIEMobile\b/.test(ua)) {
+        description.unshift('mobile mode');
+      }
+    }
+    // Add mobile postfix.
+    else if ((/^(?:Chrome|IE|Opera)$/.test(name) || name && !product && !/Browser|Mobi/.test(name)) &&
+        (os == 'Windows CE' || /Mobi/i.test(ua))) {
+      name += ' Mobile';
+    }
+    // Detect IE platform preview.
+    else if (name == 'IE' && useFeatures) {
+      try {
+        if (context.external === null) {
+          description.unshift('platform preview');
+        }
+      } catch(e) {
+        description.unshift('embedded');
+      }
+    }
+    // Detect BlackBerry OS version.
+    // http://docs.blackberry.com/en/developers/deliverables/18169/HTTP_headers_sent_by_BB_Browser_1234911_11.jsp
+    else if ((/\bBlackBerry\b/.test(product) || /\bBB10\b/.test(ua)) && (data =
+          (RegExp(product.replace(/ +/g, ' *') + '/([.\\d]+)', 'i').exec(ua) || 0)[1] ||
+          version
+        )) {
+      data = [data, /BB10/.test(ua)];
+      os = (data[1] ? (product = null, manufacturer = 'BlackBerry') : 'Device Software') + ' ' + data[0];
+      version = null;
+    }
+    // Detect Opera identifying/masking itself as another browser.
+    // http://www.opera.com/support/kb/view/843/
+    else if (this != forOwn && product != 'Wii' && (
+          (useFeatures && opera) ||
+          (/Opera/.test(name) && /\b(?:MSIE|Firefox)\b/i.test(ua)) ||
+          (name == 'Firefox' && /\bOS X (?:\d+\.){2,}/.test(os)) ||
+          (name == 'IE' && (
+            (os && !/^Win/.test(os) && version > 5.5) ||
+            /\bWindows XP\b/.test(os) && version > 8 ||
+            version == 8 && !/\bTrident\b/.test(ua)
+          ))
+        ) && !reOpera.test((data = parse.call(forOwn, ua.replace(reOpera, '') + ';'))) && data.name) {
+      // When "identifying", the UA contains both Opera and the other browser's name.
+      data = 'ing as ' + data.name + ((data = data.version) ? ' ' + data : '');
+      if (reOpera.test(name)) {
+        if (/\bIE\b/.test(data) && os == 'Mac OS') {
+          os = null;
+        }
+        data = 'identify' + data;
+      }
+      // When "masking", the UA contains only the other browser's name.
+      else {
+        data = 'mask' + data;
+        if (operaClass) {
+          name = format(operaClass.replace(/([a-z])([A-Z])/g, '$1 $2'));
+        } else {
+          name = 'Opera';
+        }
+        if (/\bIE\b/.test(data)) {
+          os = null;
+        }
+        if (!useFeatures) {
+          version = null;
+        }
+      }
+      layout = ['Presto'];
+      description.push(data);
+    }
+    // Detect WebKit Nightly and approximate Chrome/Safari versions.
+    if ((data = (/\bAppleWebKit\/([\d.]+\+?)/i.exec(ua) || 0)[1])) {
+      // Correct build number for numeric comparison.
+      // (e.g. "532.5" becomes "532.05")
+      data = [parseFloat(data.replace(/\.(\d)$/, '.0$1')), data];
+      // Nightly builds are postfixed with a "+".
+      if (name == 'Safari' && data[1].slice(-1) == '+') {
+        name = 'WebKit Nightly';
+        prerelease = 'alpha';
+        version = data[1].slice(0, -1);
+      }
+      // Clear incorrect browser versions.
+      else if (version == data[1] ||
+          version == (data[2] = (/\bSafari\/([\d.]+\+?)/i.exec(ua) || 0)[1])) {
+        version = null;
+      }
+      // Use the full Chrome version when available.
+      data[1] = (/\bChrome\/([\d.]+)/i.exec(ua) || 0)[1];
+      // Detect Blink layout engine.
+      if (data[0] == 537.36 && data[2] == 537.36 && parseFloat(data[1]) >= 28 && layout == 'WebKit') {
+        layout = ['Blink'];
+      }
+      // Detect JavaScriptCore.
+      // http://stackoverflow.com/questions/6768474/how-can-i-detect-which-javascript-engine-v8-or-jsc-is-used-at-runtime-in-androi
+      if (!useFeatures || (!likeChrome && !data[1])) {
+        layout && (layout[1] = 'like Safari');
+        data = (data = data[0], data < 400 ? 1 : data < 500 ? 2 : data < 526 ? 3 : data < 533 ? 4 : data < 534 ? '4+' : data < 535 ? 5 : data < 537 ? 6 : data < 538 ? 7 : data < 601 ? 8 : '8');
+      } else {
+        layout && (layout[1] = 'like Chrome');
+        data = data[1] || (data = data[0], data < 530 ? 1 : data < 532 ? 2 : data < 532.05 ? 3 : data < 533 ? 4 : data < 534.03 ? 5 : data < 534.07 ? 6 : data < 534.10 ? 7 : data < 534.13 ? 8 : data < 534.16 ? 9 : data < 534.24 ? 10 : data < 534.30 ? 11 : data < 535.01 ? 12 : data < 535.02 ? '13+' : data < 535.07 ? 15 : data < 535.11 ? 16 : data < 535.19 ? 17 : data < 536.05 ? 18 : data < 536.10 ? 19 : data < 537.01 ? 20 : data < 537.11 ? '21+' : data < 537.13 ? 23 : data < 537.18 ? 24 : data < 537.24 ? 25 : data < 537.36 ? 26 : layout != 'Blink' ? '27' : '28');
+      }
+      // Add the postfix of ".x" or "+" for approximate versions.
+      layout && (layout[1] += ' ' + (data += typeof data == 'number' ? '.x' : /[.+]/.test(data) ? '' : '+'));
+      // Obscure version for some Safari 1-2 releases.
+      if (name == 'Safari' && (!version || parseInt(version) > 45)) {
+        version = data;
+      }
+    }
+    // Detect Opera desktop modes.
+    if (name == 'Opera' &&  (data = /\bzbov|zvav$/.exec(os))) {
+      name += ' ';
+      description.unshift('desktop mode');
+      if (data == 'zvav') {
+        name += 'Mini';
+        version = null;
+      } else {
+        name += 'Mobile';
+      }
+      os = os.replace(RegExp(' *' + data + '$'), '');
+    }
+    // Detect Chrome desktop mode.
+    else if (name == 'Safari' && /\bChrome\b/.exec(layout && layout[1])) {
+      description.unshift('desktop mode');
+      name = 'Chrome Mobile';
+      version = null;
+
+      if (/\bOS X\b/.test(os)) {
+        manufacturer = 'Apple';
+        os = 'iOS 4.3+';
+      } else {
+        os = null;
+      }
+    }
+    // Strip incorrect OS versions.
+    if (version && version.indexOf((data = /[\d.]+$/.exec(os))) == 0 &&
+        ua.indexOf('/' + data + '-') > -1) {
+      os = trim(os.replace(data, ''));
+    }
+    // Add layout engine.
+    if (layout && !/\b(?:Avant|Nook)\b/.test(name) && (
+        /Browser|Lunascape|Maxthon/.test(name) ||
+        name != 'Safari' && /^iOS/.test(os) && /\bSafari\b/.test(layout[1]) ||
+        /^(?:Adobe|Arora|Breach|Midori|Opera|Phantom|Rekonq|Rock|Samsung Internet|Sleipnir|Web)/.test(name) && layout[1])) {
+      // Don't add layout details to description if they are falsey.
+      (data = layout[layout.length - 1]) && description.push(data);
+    }
+    // Combine contextual information.
+    if (description.length) {
+      description = ['(' + description.join('; ') + ')'];
+    }
+    // Append manufacturer to description.
+    if (manufacturer && product && product.indexOf(manufacturer) < 0) {
+      description.push('on ' + manufacturer);
+    }
+    // Append product to description.
+    if (product) {
+      description.push((/^on /.test(description[description.length - 1]) ? '' : 'on ') + product);
+    }
+    // Parse the OS into an object.
+    if (os) {
+      data = / ([\d.+]+)$/.exec(os);
+      isSpecialCasedOS = data && os.charAt(os.length - data[0].length - 1) == '/';
+      os = {
+        'architecture': 32,
+        'family': (data && !isSpecialCasedOS) ? os.replace(data[0], '') : os,
+        'version': data ? data[1] : null,
+        'toString': function() {
+          var version = this.version;
+          return this.family + ((version && !isSpecialCasedOS) ? ' ' + version : '') + (this.architecture == 64 ? ' 64-bit' : '');
+        }
+      };
+    }
+    // Add browser/OS architecture.
+    if ((data = /\b(?:AMD|IA|Win|WOW|x86_|x)64\b/i.exec(arch)) && !/\bi686\b/i.test(arch)) {
+      if (os) {
+        os.architecture = 64;
+        os.family = os.family.replace(RegExp(' *' + data), '');
+      }
+      if (
+          name && (/\bWOW64\b/i.test(ua) ||
+          (useFeatures && /\w(?:86|32)$/.test(nav.cpuClass || nav.platform) && !/\bWin64; x64\b/i.test(ua)))
+      ) {
+        description.unshift('32-bit');
+      }
+    }
+    // Chrome 39 and above on OS X is always 64-bit.
+    else if (
+        os && /^OS X/.test(os.family) &&
+        name == 'Chrome' && parseFloat(version) >= 39
+    ) {
+      os.architecture = 64;
+    }
+
+    ua || (ua = null);
+
+    /*------------------------------------------------------------------------*/
+
+    /**
+     * The platform object.
+     *
+     * @name platform
+     * @type Object
+     */
+    var platform = {};
+
+    /**
+     * The platform description.
+     *
+     * @memberOf platform
+     * @type string|null
+     */
+    platform.description = ua;
+
+    /**
+     * The name of the browser's layout engine.
+     *
+     * The list of common layout engines include:
+     * "Blink", "EdgeHTML", "Gecko", "Trident" and "WebKit"
+     *
+     * @memberOf platform
+     * @type string|null
+     */
+    platform.layout = layout && layout[0];
+
+    /**
+     * The name of the product's manufacturer.
+     *
+     * The list of manufacturers include:
+     * "Apple", "Archos", "Amazon", "Asus", "Barnes & Noble", "BlackBerry",
+     * "Google", "HP", "HTC", "LG", "Microsoft", "Motorola", "Nintendo",
+     * "Nokia", "Samsung" and "Sony"
+     *
+     * @memberOf platform
+     * @type string|null
+     */
+    platform.manufacturer = manufacturer;
+
+    /**
+     * The name of the browser/environment.
+     *
+     * The list of common browser names include:
+     * "Chrome", "Electron", "Firefox", "Firefox for iOS", "IE",
+     * "Microsoft Edge", "PhantomJS", "Safari", "SeaMonkey", "Silk",
+     * "Opera Mini" and "Opera"
+     *
+     * Mobile versions of some browsers have "Mobile" appended to their name:
+     * eg. "Chrome Mobile", "Firefox Mobile", "IE Mobile" and "Opera Mobile"
+     *
+     * @memberOf platform
+     * @type string|null
+     */
+    platform.name = name;
+
+    /**
+     * The alpha/beta release indicator.
+     *
+     * @memberOf platform
+     * @type string|null
+     */
+    platform.prerelease = prerelease;
+
+    /**
+     * The name of the product hosting the browser.
+     *
+     * The list of common products include:
+     *
+     * "BlackBerry", "Galaxy S4", "Lumia", "iPad", "iPod", "iPhone", "Kindle",
+     * "Kindle Fire", "Nexus", "Nook", "PlayBook", "TouchPad" and "Transformer"
+     *
+     * @memberOf platform
+     * @type string|null
+     */
+    platform.product = product;
+
+    /**
+     * The browser's user agent string.
+     *
+     * @memberOf platform
+     * @type string|null
+     */
+    platform.ua = ua;
+
+    /**
+     * The browser/environment version.
+     *
+     * @memberOf platform
+     * @type string|null
+     */
+    platform.version = name && version;
+
+    /**
+     * The name of the operating system.
+     *
+     * @memberOf platform
+     * @type Object
+     */
+    platform.os = os || {
+
+      /**
+       * The CPU architecture the OS is built for.
+       *
+       * @memberOf platform.os
+       * @type number|null
+       */
+      'architecture': null,
+
+      /**
+       * The family of the OS.
+       *
+       * Common values include:
+       * "Windows", "Windows Server 2008 R2 / 7", "Windows Server 2008 / Vista",
+       * "Windows XP", "OS X", "Ubuntu", "Debian", "Fedora", "Red Hat", "SuSE",
+       * "Android", "iOS" and "Windows Phone"
+       *
+       * @memberOf platform.os
+       * @type string|null
+       */
+      'family': null,
+
+      /**
+       * The version of the OS.
+       *
+       * @memberOf platform.os
+       * @type string|null
+       */
+      'version': null,
+
+      /**
+       * Returns the OS string.
+       *
+       * @memberOf platform.os
+       * @returns {string} The OS string.
+       */
+      'toString': function() { return 'null'; }
+    };
+
+    platform.parse = parse;
+    platform.toString = toStringPlatform;
+
+    if (platform.version) {
+      description.unshift(version);
+    }
+    if (platform.name) {
+      description.unshift(name);
+    }
+    if (os && name && !(os == String(os).split(' ')[0] && (os == name.split(' ')[0] || product))) {
+      description.push(product ? '(' + os + ')' : 'on ' + os);
+    }
+    if (description.length) {
+      platform.description = description.join(' ');
+    }
+    return platform;
+  }
+
+  /*--------------------------------------------------------------------------*/
+
+  // Export platform.
+  var platform = parse();
+
+  // Some AMD build optimizers, like r.js, check for condition patterns like the following:
+  if (true) {
+    // Expose platform on the global object to prevent errors when platform is
+    // loaded by a script tag in the presence of an AMD loader.
+    // See http://requirejs.org/docs/errors.html#mismatch for more details.
+    root.platform = platform;
+
+    // Define as an anonymous module so platform can be aliased through path mapping.
+    !(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
+      return platform;
+    }).call(exports, __webpack_require__, exports, module),
+				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+  }
+  // Check for `exports` after `define` in case a build optimizer adds an `exports` object.
+  else {}
+}.call(this));
+
+/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../webpack/buildin/module.js */ "./node_modules/webpack/buildin/module.js")(module), __webpack_require__(/*! ./../webpack/buildin/global.js */ "./node_modules/webpack/buildin/global.js")))
 
 /***/ }),
 
@@ -51060,6 +53934,8205 @@ if (false) {} else {
 
 /***/ }),
 
+/***/ "./node_modules/twilio-notifications/lib/client.js":
+/*!*********************************************************!*\
+  !*** ./node_modules/twilio-notifications/lib/client.js ***!
+  \*********************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+const twilsock_1 = __webpack_require__(/*! twilsock */ "./node_modules/twilsock/lib/index.js");
+const configuration_1 = __webpack_require__(/*! ./configuration */ "./node_modules/twilio-notifications/lib/configuration.js");
+const registrar_1 = __webpack_require__(/*! ./registrar */ "./node_modules/twilio-notifications/lib/registrar.js");
+const logger_1 = __webpack_require__(/*! ./logger */ "./node_modules/twilio-notifications/lib/logger.js");
+/**
+ * @class
+ * @alias Notifications
+ * @classdesc The helper library for the notification service.
+ * Provides high level api for creating and managing notification subscriptions and receiving messages
+ * Creates the instance of Notification helper library
+ *
+ * @constructor
+ * @param {string} token - Twilio access token
+ * @param {Notifications#ClientOptions} options - Options to customize client behavior
+ */
+class Client extends events_1.EventEmitter {
+    constructor(token, options = {}) {
+        super();
+        if (!token || token.length === 0) {
+            throw new Error('Token is required for Notifications client');
+        }
+        options.logLevel = options.logLevel || 'error';
+        logger_1.log.setLevel(options.logLevel);
+        const minTokenRefreshInterval = options.minTokenRefreshInterval || 10000;
+        const productId = options.productId || 'notifications';
+        options.twilsockClient = options.twilsockClient || new twilsock_1.TwilsockClient(token, productId, options);
+        options.transport = options.transport || options.twilsockClient;
+        this.services = {
+            twilsock: options.twilsockClient,
+            transport: options.transport,
+            config: new configuration_1.Configuration(null, options)
+        };
+        this.registrar = new registrar_1.Registrar(productId, this.services.transport, this.services.twilsock, this.services.config);
+        this.reliableTransportState = {
+            overall: false,
+            transport: false,
+            registration: false,
+            lastEmitted: null
+        };
+        this._onTransportStateChange(this.services.twilsock.isConnected);
+        this.registrar.on('transportReady', state => {
+            this._onRegistrationStateChange(state ? 'registered' : '');
+        });
+        this.registrar.on('stateChanged', (state) => {
+            this._onRegistrationStateChange(state);
+        });
+        this.registrar.on('needReliableTransport', this._onNeedReliableTransport.bind(this));
+        this.services.twilsock.on('message', (type, message) => this._routeMessage(type, message));
+        this.services.twilsock.on('connected', (notificationId) => {
+            this._onTransportStateChange(true);
+            this.registrar.setNotificationId('twilsock', notificationId);
+        });
+        this.services.twilsock.on('disconnected', () => {
+            this._onTransportStateChange(false);
+        });
+        this.services.config.updateToken(token);
+        this.registrar.updateToken(token);
+    }
+    get connectionState() {
+        if (this.services.twilsock.state === 'disconnected') {
+            return 'disconnected';
+        }
+        else if (this.services.twilsock.state === 'disconnecting') {
+            return 'disconnecting';
+        }
+        else if (this.services.twilsock.state === 'connected' && this.reliableTransportState.registration) {
+            return 'connected';
+        }
+        else if (this.services.twilsock.state === 'rejected') {
+            return 'denied';
+        }
+        return 'connecting';
+    }
+    /**
+     * Routes messages to the external subscribers
+     * @private
+     */
+    _routeMessage(type, message) {
+        logger_1.log.trace('Message arrived: ', type, message);
+        this.emit('message', type, message);
+    }
+    _onNeedReliableTransport(isNeeded) {
+        if (isNeeded) {
+            this.services.twilsock.connect();
+        }
+        else {
+            this.services.twilsock.disconnect();
+        }
+    }
+    _onRegistrationStateChange(state) {
+        this.reliableTransportState.registration = (state === 'registered');
+        this._updateTransportState();
+    }
+    _onTransportStateChange(connected) {
+        this.reliableTransportState.transport = connected;
+        this._updateTransportState();
+    }
+    _updateTransportState() {
+        const overallState = this.reliableTransportState.transport
+            && this.reliableTransportState.registration;
+        if (this.reliableTransportState.overall !== overallState) {
+            this.reliableTransportState.overall = overallState;
+            logger_1.log.info('Transport ready:', overallState);
+            this.emit('transportReady', overallState);
+        }
+        if (this.reliableTransportState.lastEmitted !== this.connectionState) {
+            this.reliableTransportState.lastEmitted = this.connectionState;
+            this.emit('connectionStateChanged', this.connectionState);
+        }
+    }
+    /**
+     * Adds the subscription for the given message type
+     * @param {string} messageType The type of message that you want to receive
+     * @param {string} channelType. Supported are 'twilsock', 'gcm' and 'fcm'
+     */
+    subscribe(messageType, channelType = 'twilsock') {
+        logger_1.log.trace('Add subscriptions for message type: ', messageType, channelType);
+        return this.registrar.subscribe(messageType, channelType);
+    }
+    /**
+     * Remove the subscription for the particular message type
+     * @param {string} messageType The type of message that you don't want to receive anymore
+     * @param {string} channelType. Supported are 'twilsock', 'gcm' and 'fcm'
+     */
+    unsubscribe(messageType, channelType = 'twilsock') {
+        logger_1.log.trace('Remove subscriptions for message type: ', messageType, channelType);
+        return this.registrar.unsubscribe(messageType, channelType);
+    }
+    /**
+     * Handle incoming push notification.
+     * Client application should call this method when it receives push notifications and pass the received data
+     * @param {Object} message push message
+     * @return {PushNotification}
+     */
+    handlePushNotification(message) {
+        return {
+            messageType: message.twi_message_type,
+            payload: message.payload
+        };
+    }
+    /**
+     * Set APN/GCM/FCM token to enable application register for a push messages
+     * @param {string} gcmToken/fcmToken Token received from GCM/FCM system
+     */
+    setPushRegistrationId(registrationId, channelType) {
+        logger_1.log.trace('Set push registration id', registrationId, channelType);
+        this.registrar.setNotificationId(channelType, registrationId);
+    }
+    /**
+     * Updates auth token for registration
+     * @param {string} token Authentication token for registrations
+     */
+    async updateToken(token) {
+        logger_1.log.info('authTokenUpdated');
+        if (this.services.config.token === token) {
+            return;
+        }
+        await this.services.twilsock.updateToken(token);
+        this.services.config.updateToken(token);
+        this.registrar.updateToken(token);
+    }
+}
+exports.Client = Client;
+/**
+ * Fired when new message arrived.
+ * @param {Object} message`
+ * @event Client#message
+ */
+/**
+ * Fired when transport state has changed
+ * @param {boolean} transport state
+ * @event Client#transportReady
+ */
+/**
+ * Fired when transport state has been changed
+ * @param {string} transport state
+ * @event Client#connectionStateChanged
+ */
+/**
+ * These options can be passed to Client constructor
+ * @typedef {Object} Notifications#ClientOptions
+ * @property {String} [logLevel='error'] - The level of logging to enable. Valid options
+ *   (from strictest to broadest): ['silent', 'error', 'warn', 'info', 'debug', 'trace']
+ */
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-notifications/lib/configuration.js":
+/*!****************************************************************!*\
+  !*** ./node_modules/twilio-notifications/lib/configuration.js ***!
+  \****************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+class Configuration {
+    constructor(token, options = {}) {
+        let config = options.notifications || {};
+        const region = config.region || options.region || 'us1';
+        const defaultUrl = `https://ers.${region}.twilio.com/v1/registrations`;
+        this.registrarUrl = config.ersUrl || defaultUrl;
+        this._token = token;
+    }
+    updateToken(token) {
+        this._token = token;
+    }
+    get token() {
+        return this._token;
+    }
+}
+exports.Configuration = Configuration;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-notifications/lib/connector.js":
+/*!************************************************************!*\
+  !*** ./node_modules/twilio-notifications/lib/connector.js ***!
+  \************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+const logger_1 = __webpack_require__(/*! ./logger */ "./node_modules/twilio-notifications/lib/logger.js");
+class RegistrationState {
+    constructor(token = '', notificationId = '', messageTypes = new Set()) {
+        this.token = token;
+        this.notificationId = notificationId;
+        this.messageTypes = messageTypes;
+    }
+    clone() {
+        return new RegistrationState(this.token, this.notificationId, new Set(this.messageTypes));
+    }
+}
+exports.RegistrationState = RegistrationState;
+function setDifference(a, b) {
+    return [...[...a].filter(x => !b.has(x)),
+        ...[...b].filter(x => !a.has(x))];
+}
+function hasDifference(a, b) {
+    let reasons = new Set();
+    if (a.notificationId !== b.notificationId) {
+        reasons.add('notificationId');
+    }
+    if (a.token !== b.token) {
+        reasons.add('token');
+    }
+    if (setDifference(a.messageTypes, b.messageTypes).length > 0) {
+        reasons.add('messageType');
+    }
+    return [reasons.size > 0, reasons];
+}
+class Connector extends events_1.EventEmitter {
+    constructor(config) {
+        super();
+        this.config = config;
+        this.desiredState = new RegistrationState();
+        this.currentState = new RegistrationState();
+        this.hasActiveAttempt = false;
+    }
+    async subscribe(messageType) {
+        if (this.desiredState.messageTypes.has(messageType)) {
+            logger_1.log.debug('message type already registered ', messageType);
+            return;
+        }
+        this.desiredState.messageTypes.add(messageType);
+        await this.persistRegistration();
+    }
+    async unsubscribe(messageType) {
+        if (!this.desiredState.messageTypes.has(messageType)) {
+            return;
+        }
+        this.desiredState.messageTypes.delete(messageType);
+        await this.persistRegistration();
+    }
+    updateToken(token) {
+        this.desiredState.token = token;
+        this.persistRegistration();
+    }
+    async persistRegistration() {
+        if (!this.config.token || this.config.token.length === 0) {
+            logger_1.log.trace('Can\'t persist registration: token is not set');
+            return;
+        }
+        if (this.hasActiveAttempt) {
+            logger_1.log.trace('One registration attempt is already in progress');
+            return;
+        }
+        let [needToUpdate, reasons] = hasDifference(this.desiredState, this.currentState);
+        if (!needToUpdate) {
+            return;
+        }
+        if (!this.currentState.notificationId) {
+            reasons.delete('notificationId');
+        }
+        logger_1.log.trace('Persisting registration', reasons, this.desiredState);
+        try {
+            this.hasActiveAttempt = true;
+            let stateToPersist = this.desiredState.clone();
+            if (stateToPersist.messageTypes.size > 0) {
+                let persistedState = await this.updateRegistration(stateToPersist, reasons);
+                this.currentState.token = persistedState.token;
+                this.currentState.notificationId = persistedState.notificationId;
+                this.currentState.messageTypes = persistedState.messageTypes;
+                this.emit('stateChanged', 'registered');
+            }
+            else {
+                await this.removeRegistration();
+                this.currentState.token = stateToPersist.token;
+                this.currentState.notificationId = stateToPersist.notificationId;
+                this.currentState.messageTypes.clear();
+                this.emit('stateChanged', 'unregistered');
+            }
+        }
+        finally {
+            this.hasActiveAttempt = false;
+            setTimeout(() => this.persistRegistration(), 0);
+        }
+    }
+    setNotificationId(notificationId) {
+        this.desiredState.notificationId = notificationId;
+        this.persistRegistration();
+    }
+}
+exports.Connector = Connector;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-notifications/lib/index.js":
+/*!********************************************************!*\
+  !*** ./node_modules/twilio-notifications/lib/index.js ***!
+  \********************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const client_1 = __webpack_require__(/*! ./client */ "./node_modules/twilio-notifications/lib/client.js");
+exports.Notifications = client_1.Client;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-notifications/lib/logger.js":
+/*!*********************************************************!*\
+  !*** ./node_modules/twilio-notifications/lib/logger.js ***!
+  \*********************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const logger = __webpack_require__(/*! loglevel */ "./node_modules/loglevel/lib/loglevel.js");
+function prepareLine(prefix, args) {
+    return [`${new Date().toISOString()} Notifications ${prefix}:`].concat(Array.from(args));
+}
+class Logger {
+    constructor() {
+        this.prefix = '';
+    }
+    static scope(prefix = '') {
+        // TBD this.prefix += ' ' + prefix;
+        return new Logger();
+    }
+    setLevel(level) {
+        logger.setLevel(level);
+    }
+    trace(...args) { logger.debug.apply(null, prepareLine('T' + this.prefix, args)); }
+    debug(...args) { logger.debug.apply(null, prepareLine('D' + this.prefix, args)); }
+    info(...args) { logger.info.apply(null, prepareLine('I' + this.prefix, args)); }
+    warn(...args) { logger.warn.apply(null, prepareLine('W' + this.prefix, args)); }
+    error(...args) { logger.error.apply(null, prepareLine('E' + this.prefix, args)); }
+}
+exports.Logger = Logger;
+let logInstance = Logger.scope();
+exports.log = logInstance;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-notifications/lib/registrar.connector.js":
+/*!**********************************************************************!*\
+  !*** ./node_modules/twilio-notifications/lib/registrar.connector.js ***!
+  \**********************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const operation_retrier_1 = __webpack_require__(/*! operation-retrier */ "./node_modules/operation-retrier/lib/index.js");
+const logger_1 = __webpack_require__(/*! ./logger */ "./node_modules/twilio-notifications/lib/logger.js");
+const connector_1 = __webpack_require__(/*! ./connector */ "./node_modules/twilio-notifications/lib/connector.js");
+exports.Connector = connector_1.Connector;
+let retrierConfig = {
+    min: 2000,
+    max: 120000,
+    randomness: 0.2
+};
+/**
+ * Manages the registrations on ERS service.
+ * Deduplicates registrations and manages them automatically
+ */
+class RegistrarConnector extends connector_1.Connector {
+    /**
+     * Creates new instance of the ERS registrar
+     *
+     * @param Object configuration
+     * @param string notificationId
+     * @param string channelType
+     * @param Array messageTypes
+     */
+    constructor(channelType, context, transport, config) {
+        super(config);
+        this.channelType = channelType;
+        this.context = context;
+        this.transport = transport;
+    }
+    async updateRegistration(registration, reasons) {
+        if (reasons.has('notificationId')) {
+            await this.removeRegistration();
+        }
+        if (!registration.notificationId || !registration.notificationId.length) {
+            return registration;
+        }
+        await this.register(registration);
+        return registration;
+    }
+    async removeRegistration() {
+        if (!this.registrationId) {
+            return;
+        }
+        const url = `${this.config.registrarUrl}/${this.registrationId}?productId=${this.context.productId}`;
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Twilio-Token': this.config.token
+        };
+        try {
+            logger_1.log.trace('Removing registration for ', this.channelType);
+            await new operation_retrier_1.Retrier(Object.assign(retrierConfig, { maxAttemptsCount: 3 }))
+                .run(() => this.transport.delete(url, headers));
+            logger_1.log.debug('Registration removed for', this.channelType);
+        }
+        catch (err) {
+            logger_1.log.error('Failed to remove of registration ', this.channelType, err);
+            throw err;
+        }
+    }
+    async register(registration) {
+        logger_1.log.trace('Registering', this.channelType, registration);
+        let registrarRequest = {
+            endpoint_platform: this.context.platform,
+            channel_type: this.channelType,
+            version: this.context.protocolVersion.toString(),
+            message_types: Array.from(registration.messageTypes),
+            data: {
+                registration_id: registration.notificationId
+            },
+            ttl: 'PT24H'
+        };
+        const url = `${this.config.registrarUrl}?productId=${this.context.productId}`;
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Twilio-Token': registration.token
+        };
+        logger_1.log.trace('Creating registration for channel ', this.channelType);
+        try {
+            let response = await new operation_retrier_1.Retrier(retrierConfig)
+                .run(() => this.transport.post(url, headers, registrarRequest));
+            this.registrationId = response.body.id;
+            logger_1.log.debug('Registration created: ', response);
+        }
+        catch (err) {
+            logger_1.log.error('Registration failed: ', err);
+            throw err;
+        }
+    }
+}
+exports.RegistrarConnector = RegistrarConnector;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-notifications/lib/registrar.js":
+/*!************************************************************!*\
+  !*** ./node_modules/twilio-notifications/lib/registrar.js ***!
+  \************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+const registrar_connector_1 = __webpack_require__(/*! ./registrar.connector */ "./node_modules/twilio-notifications/lib/registrar.connector.js");
+const twilsock_connector_1 = __webpack_require__(/*! ./twilsock.connector */ "./node_modules/twilio-notifications/lib/twilsock.connector.js");
+/**
+ * Provides an interface to the ERS registrar
+ */
+class Registrar extends events_1.EventEmitter {
+    /**
+     * Creates the new instance of registrar client
+     */
+    constructor(productId, transport, twilsock, config) {
+        super();
+        this.config = config;
+        this.connectors = new Map();
+        const platform = this.detectPlatform();
+        this.connectors.set('gcm', new registrar_connector_1.RegistrarConnector('gcm', { protocolVersion: 3, productId, platform }, transport, config));
+        this.connectors.set('fcm', new registrar_connector_1.RegistrarConnector('fcm', { protocolVersion: 3, productId, platform }, transport, config));
+        this.connectors.set('apn', new registrar_connector_1.RegistrarConnector('apn', { protocolVersion: 4, productId, platform }, transport, config));
+        this.connectors.set('twilsock', new twilsock_connector_1.TwilsockConnector({ productId, platform }, twilsock, config));
+        this.connectors.get('twilsock').on('transportReady', state => this.emit('transportReady', state));
+    }
+    /**
+     *  Sets notification ID.
+     *  If new URI is different from previous, it triggers updating of registration for given channel
+     *
+     *  @param {string} channelType channel type (apn|gcm|fcm|twilsock)
+     *  @param {string} notificationId The notification ID
+     */
+    setNotificationId(channelType, notificationId) {
+        this.connector(channelType).setNotificationId(notificationId);
+    }
+    /**
+     * Subscribe for given type of message
+     *
+     * @param {String} messageType Message type identifier
+     * @param {String} channelType Channel type, can be 'twilsock', 'gcm' or 'fcm'
+     * @public
+     */
+    subscribe(messageType, channelType) {
+        return this.connector(channelType).subscribe(messageType);
+    }
+    /**
+     * Remove subscription
+     * @param {String} messageType Message type
+     * @param {String} channelType Channel type (twilsock or gcm/fcm)
+     */
+    unsubscribe(messageType, channelType) {
+        return this.connector(channelType).unsubscribe(messageType);
+    }
+    updateToken(token) {
+        this.connectors.forEach(connector => connector.updateToken(token));
+    }
+    /**
+     * @param {String} type Channel type
+     * @throws {Error} Error with description
+     */
+    connector(type) {
+        let connector = this.connectors.get(type);
+        if (!connector) {
+            throw new Error(`Unknown channel type: ${type}`);
+        }
+        return connector;
+    }
+    /**
+     * Returns platform string limited to max 128 chars
+     */
+    detectPlatform() {
+        let platform = '';
+        if (typeof navigator !== 'undefined') {
+            platform = 'unknown';
+            if (typeof navigator.product !== 'undefined') {
+                platform = navigator.product;
+            }
+            if (typeof navigator.userAgent !== 'undefined') {
+                platform = navigator.userAgent;
+            }
+        }
+        else {
+            platform = 'web';
+        }
+        return platform.substring(0, 128);
+    }
+}
+exports.Registrar = Registrar;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-notifications/lib/twilsock.connector.js":
+/*!*********************************************************************!*\
+  !*** ./node_modules/twilio-notifications/lib/twilsock.connector.js ***!
+  \*********************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const uuid = __webpack_require__(/*! uuid */ "./node_modules/uuid/index.js");
+const connector_1 = __webpack_require__(/*! ./connector */ "./node_modules/twilio-notifications/lib/connector.js");
+const DEFAULT_TTL = 60 * 60 * 48;
+/**
+ * Registrar connector implementation for twilsock
+ */
+class TwilsockConnector extends connector_1.Connector {
+    constructor(context, twilsock, config) {
+        super(config);
+        this.twilsock = twilsock;
+        this.context = context;
+        context.id = uuid.v4();
+        this.twilsock.on('stateChanged', state => {
+            if (state !== 'connected') {
+                this.emit('transportReady', false);
+            }
+        });
+        this.twilsock.on('registered', id => {
+            if (context && id === context.id && twilsock.state === 'connected') {
+                this.emit('transportReady', true);
+            }
+        });
+    }
+    setNotificationId(...args) { }
+    updateToken(token) {
+        // no need to do anything here, twilsock backend handles it on it's own
+        // so just ignoring here
+    }
+    async updateContextRequest(messageTypes) {
+        let context = {
+            product_id: this.context.productId,
+            notification_protocol_version: 4,
+            endpoint_platform: this.context.platform,
+            message_types: messageTypes
+        };
+        this.emit('transportReady', false);
+        await this.twilsock.setNotificationsContext(this.context.id, context);
+    }
+    async updateRegistration(registration, reasons) {
+        if (!reasons.has('messageType')) {
+            return;
+        }
+        await this.updateContextRequest(Array.from(registration.messageTypes));
+        return registration;
+    }
+    removeRegistration() {
+        return this.twilsock.removeNotificationsContext(this.context.id);
+    }
+}
+exports.TwilsockConnector = TwilsockConnector;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/cache.js":
+/*!***********************************************!*\
+  !*** ./node_modules/twilio-sync/lib/cache.js ***!
+  \***********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const tree_1 = __webpack_require__(/*! ./utils/tree */ "./node_modules/twilio-sync/lib/utils/tree.js");
+class Entry {
+    constructor(value, revision) {
+        this.value = value;
+        this.revision = (revision || 0);
+    }
+    get isValid() {
+        return true;
+    }
+}
+class Tombstone {
+    constructor(revision) {
+        this.revision = revision;
+    }
+    get isValid() {
+        return false;
+    }
+}
+class Cache {
+    constructor() {
+        this.items = new tree_1.TreeMap();
+    }
+    store(key, value, revision) {
+        let entry = this.items.get(key);
+        if (entry && entry.revision > revision) {
+            if (entry.isValid) {
+                return entry.value;
+            }
+            return null;
+        }
+        this.items.set(key, new Entry(value, revision));
+        return value;
+    }
+    delete(key, revision, force = false) {
+        let curr = this.items.get(key);
+        if (!curr || curr.revision < revision ||
+            (curr && force === true) /* forced delete when revision is unknown */) {
+            this.items.set(key, new Tombstone(revision));
+        }
+    }
+    isKnown(key, revision) {
+        let curr = this.items.get(key);
+        return curr && curr.revision >= revision;
+    }
+    get(key) {
+        let entry = this.items.get(key);
+        if (entry && entry.isValid) {
+            return entry.value;
+        }
+        return null;
+    }
+    has(key) {
+        let entry = this.items.get(key);
+        return entry && entry.isValid;
+    }
+    forEach(callbackfn) {
+        if (this.items) {
+            for (let [key, entry] of this.items) {
+                if (entry.isValid) {
+                    callbackfn(key, entry.value);
+                }
+            }
+        }
+    }
+}
+exports.Cache = Cache;
+exports.default = Cache;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/client.js":
+/*!************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/client.js ***!
+  \************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+const twilsock_1 = __webpack_require__(/*! twilsock */ "./node_modules/twilsock/lib/index.js");
+const twilio_notifications_1 = __webpack_require__(/*! twilio-notifications */ "./node_modules/twilio-notifications/lib/index.js");
+const uri_1 = __webpack_require__(/*! ./utils/uri */ "./node_modules/twilio-sync/lib/utils/uri.js");
+const syncerror_1 = __webpack_require__(/*! ./utils/syncerror */ "./node_modules/twilio-sync/lib/utils/syncerror.js");
+const sanitize_1 = __webpack_require__(/*! ./utils/sanitize */ "./node_modules/twilio-sync/lib/utils/sanitize.js");
+const logger_1 = __webpack_require__(/*! ./utils/logger */ "./node_modules/twilio-sync/lib/utils/logger.js");
+const configuration_1 = __webpack_require__(/*! ./configuration */ "./node_modules/twilio-sync/lib/configuration.js");
+const subscriptions_1 = __webpack_require__(/*! ./subscriptions */ "./node_modules/twilio-sync/lib/subscriptions.js");
+const router_1 = __webpack_require__(/*! ./router */ "./node_modules/twilio-sync/lib/router.js");
+const network_1 = __webpack_require__(/*! ./services/network */ "./node_modules/twilio-sync/lib/services/network.js");
+const syncdocument_1 = __webpack_require__(/*! ./syncdocument */ "./node_modules/twilio-sync/lib/syncdocument.js");
+const synclist_1 = __webpack_require__(/*! ./synclist */ "./node_modules/twilio-sync/lib/synclist.js");
+const syncmap_1 = __webpack_require__(/*! ./syncmap */ "./node_modules/twilio-sync/lib/syncmap.js");
+const clientInfo_1 = __webpack_require__(/*! ./clientInfo */ "./node_modules/twilio-sync/lib/clientInfo.js");
+const entitiesCache_1 = __webpack_require__(/*! ./entitiesCache */ "./node_modules/twilio-sync/lib/entitiesCache.js");
+const storage_1 = __webpack_require__(/*! ./services/storage */ "./node_modules/twilio-sync/lib/services/storage.js");
+const syncstream_1 = __webpack_require__(/*! ./streams/syncstream */ "./node_modules/twilio-sync/lib/streams/syncstream.js");
+const livequery_1 = __webpack_require__(/*! ./livequery */ "./node_modules/twilio-sync/lib/livequery.js");
+const livequery_2 = __webpack_require__(/*! ./livequery */ "./node_modules/twilio-sync/lib/livequery.js");
+const SYNC_PRODUCT_ID = 'data_sync';
+const SDK_VERSION = __webpack_require__(/*! ../package.json */ "./node_modules/twilio-sync/package.json").version;
+function decompose(arg) {
+    if (!arg) {
+        return { mode: 'create_new' };
+    }
+    else if (typeof arg === 'string') {
+        return { id: arg, mode: 'open_or_create' };
+    }
+    else {
+        sanitize_1.validateOptionalTtl(arg.ttl);
+        let mode = arg.mode || (arg.id ? 'open_or_create' : 'create_new');
+        return Object.assign(Object.assign({}, arg), { mode: mode });
+    }
+}
+/**
+ * @class Client
+ * @classdesc
+ * Client for the Twilio Sync service.
+ * @constructor
+ * @param {String} token - Twilio access token.
+ * @param {Client#ClientOptions} [options] - Options to customize the Client.
+ * @example
+ * // Using NPM
+ * var SyncClient = require('twilio-sync');
+ * var syncClient = new SyncClient(token, { logLevel: 'debug' });
+ *
+ * // Using CDN
+ * var SyncClient = new Twilio.Sync.Client(token, { logLevel: 'debug' });
+ *
+ * @property {Client#ConnectionState} connectionState - Contains current service connection state.
+ * Valid options are ['connecting', 'connected', 'disconnecting', 'disconnected', 'denied', 'error'].
+ */
+class Client extends events_1.EventEmitter {
+    constructor(fpaToken, options = {}) {
+        super();
+        if (!fpaToken) {
+            throw new Error('Sync library needs a valid Twilio token to be passed');
+        }
+        if (options.hasOwnProperty('logLevel')) {
+            logger_1.default.setLevel(options.logLevel);
+        }
+        else {
+            logger_1.default.setLevel('silent');
+        }
+        const productId = options.productId = options.productId || SYNC_PRODUCT_ID;
+        let twilsock = options.twilsockClient = options.twilsockClient || new twilsock_1.Twilsock(fpaToken, productId, options);
+        twilsock.on('tokenAboutToExpire', ttl => this.emit('tokenAboutToExpire', ttl));
+        twilsock.on('tokenExpired', () => this.emit('tokenExpired'));
+        twilsock.on('connectionError', err => this.emit('connectionError', err));
+        let notifications = options.notificationsClient = options.notificationsClient || new twilio_notifications_1.Notifications(fpaToken, options);
+        let config = new configuration_1.Configuration(options);
+        let network = new network_1.NetworkService(new clientInfo_1.ClientInfo(SDK_VERSION), config, twilsock);
+        let storage = new storage_1.SessionStorage(config);
+        this.localStorageId = null;
+        twilsock.connect();
+        this.services = {
+            config,
+            twilsock,
+            notifications,
+            network,
+            storage,
+            router: null,
+            subscriptions: null
+        };
+        let subscriptions = new subscriptions_1.Subscriptions(this.services);
+        let router = new router_1.Router({ config, subscriptions, notifications });
+        this.services.router = router;
+        this.services.subscriptions = subscriptions;
+        this.entities = new entitiesCache_1.EntitiesCache();
+        notifications.on('connectionStateChanged', () => {
+            this.emit('connectionStateChanged', this.services.notifications.connectionState);
+        });
+    }
+    /**
+     * Current version of Sync client.
+     * @name Client#version
+     * @type String
+     * @readonly
+     */
+    static get version() {
+        return SDK_VERSION;
+    }
+    get connectionState() {
+        return this.services.notifications.connectionState;
+    }
+    /**
+     * Returns promise which resolves when library is correctly initialized
+     * Or throws if initialization is impossible
+     * @private
+     */
+    async ensureReady() {
+        if (!this.services.config.sessionStorageEnabled) {
+            return;
+        }
+        try {
+            let storageSettings = await this.services.twilsock.storageId();
+            this.services.storage.updateStorageId(storageSettings.id);
+        }
+        catch (e) {
+            logger_1.default.warn('Failed to initialize storage', e);
+        }
+    }
+    storeRootInSessionCache(type, id, value) {
+        // can't store without id
+        if (!this.services.config.sessionStorageEnabled || !id) {
+            return;
+        }
+        let valueToStore = sanitize_1.deepClone(value);
+        if (type === synclist_1.SyncList.type || type === syncmap_1.SyncMap.type) {
+            valueToStore['last_event_id'] = null;
+            delete valueToStore['items'];
+        }
+        this.services.storage.store(type, id, valueToStore);
+    }
+    readRootFromSessionCache(type, id) {
+        if (!this.services.config.sessionStorageEnabled || !id) {
+            return null;
+        }
+        return this.services.storage.read(type, id);
+    }
+    async _get(baseUri, id, optimistic = false) {
+        if (!id) {
+            throw new syncerror_1.SyncError(`Cannot get entity without id`, 404);
+        }
+        const uri = new uri_1.UriBuilder(baseUri).pathSegment(id)
+            .queryParam('Include', optimistic ? 'items' : undefined).build();
+        let response = await this.services.network.get(uri);
+        return response.body;
+    }
+    _createDocument(id, data, ttl) {
+        let requestBody = {
+            unique_name: id,
+            data: data || {}
+        };
+        if (typeof ttl === 'number') {
+            requestBody.ttl = ttl;
+        }
+        return this.services.network.post(this.services.config.documentsUri, requestBody)
+            .then(response => {
+            response.body.data = requestBody.data;
+            return response.body;
+        });
+    }
+    async _getDocument(id) {
+        return (this.readRootFromSessionCache(syncdocument_1.SyncDocument.type, id) || this._get(this.services.config.documentsUri, id));
+    }
+    _createList(id, purpose, context, ttl) {
+        const requestBody = {
+            unique_name: id,
+            purpose: purpose,
+            context: context
+        };
+        if (typeof ttl === 'number') {
+            requestBody.ttl = ttl;
+        }
+        return this.services.network.post(this.services.config.listsUri, requestBody).then(response => response.body);
+    }
+    async _getList(id) {
+        return (this.readRootFromSessionCache(synclist_1.SyncList.type, id) || this._get(this.services.config.listsUri, id));
+    }
+    _createMap(id, ttl) {
+        let requestBody = {
+            unique_name: id
+        };
+        if (typeof ttl === 'number') {
+            requestBody.ttl = ttl;
+        }
+        return this.services.network.post(this.services.config.mapsUri, requestBody).then(response => response.body);
+    }
+    async _getMap(id, optimistic = false) {
+        return (this.readRootFromSessionCache(syncmap_1.SyncMap.type, id) || this._get(this.services.config.mapsUri, id, optimistic));
+    }
+    async _getStream(id) {
+        return (this.readRootFromSessionCache(syncstream_1.SyncStream.type, id) || this._get(this.services.config.streamsUri, id, false));
+    }
+    async _createStream(id, ttl) {
+        let requestBody = {
+            unique_name: id
+        };
+        if (typeof ttl === 'number') {
+            requestBody.ttl = ttl;
+        }
+        const response = await this.services.network.post(this.services.config.streamsUri, requestBody);
+        const streamDescriptor = response.body;
+        return streamDescriptor;
+    }
+    _getLiveQuery(sid) {
+        return this.readRootFromSessionCache(livequery_1.LiveQuery.type, sid);
+    }
+    getCached(id, type) {
+        if (id) {
+            return this.entities.get(id, type) || null;
+        }
+        return null;
+    }
+    removeFromCacheAndSession(type, sid, uniqueName) {
+        this.entities.remove(sid);
+        if (this.services.config.sessionStorageEnabled) {
+            this.services.storage.remove(type, sid, uniqueName);
+        }
+    }
+    /**
+     * Read or create a Sync Document.
+     * @param {String | Client#OpenOptions} [arg] One of:
+     * <li>Unique name or SID identifying a Sync Document - opens a Document with the given identifier or creates one if it does not exist.</li>
+     * <li>none - creates a new Document with a randomly assigned SID and no unique name.</li>
+     * <li>{@link Client#OpenOptions} object for more granular control.</li>
+     * @return {Promise<Document>} a promise which resolves after the Document is successfully read (or created).
+     * This promise may reject if the Document could not be created or if this endpoint lacks the necessary permissions to access it.
+     * @public
+     * @example
+     * syncClient.document('MyDocument')
+     *   .then(function(document) {
+     *     console.log('Successfully opened a Document. SID: ' + document.sid);
+     *     document.on('updated', function(event) {
+     *       console.log('Received updated event: ', event);
+     *     });
+     *   })
+     *   .catch(function(error) {
+     *     console.log('Unexpected error', error);
+     *   });
+     */
+    async document(arg) {
+        await this.ensureReady();
+        let opts = decompose(arg);
+        let docDescriptor;
+        if (opts.mode === 'create_new') {
+            docDescriptor = await this._createDocument(opts.id, opts.value, opts.ttl);
+        }
+        else {
+            let docFromInMemoryCache = this.getCached(opts.id, syncdocument_1.SyncDocument.type);
+            if (docFromInMemoryCache) {
+                return new syncdocument_1.SyncDocument(docFromInMemoryCache);
+            }
+            else {
+                try {
+                    docDescriptor = await this._getDocument(opts.id);
+                }
+                catch (err) {
+                    if (err.status !== 404 || opts.mode === 'open_existing') {
+                        throw err;
+                    }
+                    else {
+                        try {
+                            docDescriptor = await this._createDocument(opts.id, opts.value, opts.ttl);
+                        }
+                        catch (err) {
+                            if (err.status === 409) {
+                                return this.document(arg);
+                            }
+                            else {
+                                throw err;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        this.storeRootInSessionCache(syncdocument_1.SyncDocument.type, opts.id, docDescriptor);
+        let syncDocumentImpl = new syncdocument_1.SyncDocumentImpl(this.services, docDescriptor, (type, sid, uniqueName) => this.removeFromCacheAndSession(type, sid, uniqueName));
+        syncDocumentImpl = this.entities.store(syncDocumentImpl);
+        return new syncdocument_1.SyncDocument(syncDocumentImpl);
+    }
+    /**
+     * Read or create a Sync Map.
+     * @param {String | Client#OpenOptions} [arg] One of:
+     * <li>Unique name or SID identifying a Sync Map - opens a Map with the given identifier or creates one if it does not exist.</li>
+     * <li>none - creates a new Map with a randomly assigned SID and no unique name.</li>
+     * <li>{@link Client#OpenOptions} object for more granular control.</li>
+     * @return {Promise<Map>} a promise which resolves after the Map is successfully read (or created).
+     * This promise may reject if the Map could not be created or if this endpoint lacks the necessary permissions to access it.
+     * @public
+     * @example
+     * syncClient.map('MyMap')
+     *   .then(function(map) {
+     *     console.log('Successfully opened a Map. SID: ' + map.sid);
+     *     map.on('itemUpdated', function(event) {
+     *       console.log('Received itemUpdated event: ', event);
+     *     });
+     *   })
+     *   .catch(function(error) {
+     *     console.log('Unexpected error', error);
+     *   });
+     */
+    async map(arg) {
+        await this.ensureReady();
+        let opts = decompose(arg);
+        let mapDescriptor;
+        if (opts.mode === 'create_new') {
+            mapDescriptor = await this._createMap(opts.id, opts.ttl);
+        }
+        else {
+            let mapFromInMemoryCache = this.getCached(opts.id, syncmap_1.SyncMap.type);
+            if (mapFromInMemoryCache) {
+                return new syncmap_1.SyncMap(mapFromInMemoryCache);
+            }
+            else {
+                try {
+                    mapDescriptor = await this._getMap(opts.id, opts.includeItems);
+                }
+                catch (err) {
+                    if (err.status !== 404 || opts.mode === 'open_existing') {
+                        throw err;
+                    }
+                    else {
+                        try {
+                            mapDescriptor = await this._createMap(opts.id, opts.ttl);
+                        }
+                        catch (err) {
+                            if (err.status === 409) {
+                                return this.map(arg);
+                            }
+                            else {
+                                throw err;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        this.storeRootInSessionCache(syncmap_1.SyncMap.type, opts.id, mapDescriptor);
+        let syncMapImpl = new syncmap_1.SyncMapImpl(this.services, mapDescriptor, (type, sid, uniqueName) => this.removeFromCacheAndSession(type, sid, uniqueName));
+        syncMapImpl = this.entities.store(syncMapImpl);
+        return new syncmap_1.SyncMap(syncMapImpl);
+    }
+    /**
+     * Read or create a Sync List.
+     * @param {String | Client#OpenOptions} [arg] One of:
+     * <li>Unique name or SID identifying a Sync List - opens a List with the given identifier or creates one if it does not exist.</li>
+     * <li>none - creates a new List with a randomly assigned SID and no unique name.</li>
+     * <li>{@link Client#OpenOptions} object for more granular control.</li>
+     * @return {Promise<List>} a promise which resolves after the List is successfully read (or created).
+     * This promise may reject if the List could not be created or if this endpoint lacks the necessary permissions to access it.
+     * @public
+     * @example
+     * syncClient.list('MyList')
+     *   .then(function(list) {
+     *     console.log('Successfully opened a List. SID: ' + list.sid);
+     *     list.on('itemAdded', function(event) {
+     *       console.log('Received itemAdded event: ', event);
+     *     });
+     *   })
+     *   .catch(function(error) {
+     *     console.log('Unexpected error', error);
+     *   });
+     */
+    async list(arg) {
+        await this.ensureReady();
+        let opts = decompose(arg);
+        let listDescriptor;
+        if (opts.mode === 'create_new') {
+            listDescriptor = await this._createList(opts.id, opts.purpose, opts.context, opts.ttl);
+        }
+        else {
+            let listFromInMemoryCache = this.getCached(opts.id, synclist_1.SyncList.type);
+            if (listFromInMemoryCache) {
+                return new synclist_1.SyncList(listFromInMemoryCache);
+            }
+            else {
+                try {
+                    listDescriptor = await this._getList(opts.id);
+                }
+                catch (err) {
+                    if (err.status !== 404 || opts.mode === 'open_existing') {
+                        throw err;
+                    }
+                    else {
+                        try {
+                            listDescriptor = await this._createList(opts.id, opts.purpose, opts.context, opts.ttl);
+                        }
+                        catch (err) {
+                            if (err.status === 409) {
+                                return this.list(arg);
+                            }
+                            else {
+                                throw err;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        this.storeRootInSessionCache(synclist_1.SyncList.type, opts.id, listDescriptor);
+        let syncListImpl = new synclist_1.SyncListImpl(this.services, listDescriptor, (type, sid, uniqueName) => this.removeFromCacheAndSession(type, sid, uniqueName));
+        syncListImpl = this.entities.store(syncListImpl);
+        return new synclist_1.SyncList(syncListImpl);
+    }
+    /**
+     * Read or create a Sync Message Stream.
+     * @param {String | Client#OpenOptions} [arg] One of:
+     * <li>Unique name or SID identifying a Stream - opens a Stream with the given identifier or creates one if it does not exist.</li>
+     * <li>none - creates a new Stream with a randomly assigned SID and no unique name.</li>
+     * <li>{@link Client#OpenOptions} object for more granular control.</li>
+     * @return {Promise<Stream>} a promise which resolves after the Stream is successfully read (or created).
+     * The flow of messages will begin imminently (but not necessarily immediately) upon resolution.
+     * This promise may reject if the Stream could not be created or if this endpoint lacks the necessary permissions to access it.
+     * @public
+     * @example
+     * syncClient.stream('MyStream')
+     *   .then(function(stream) {
+     *     console.log('Successfully opened a Message Stream. SID: ' + stream.sid);
+     *     stream.on('messagePublished', function(event) {
+     *       console.log('Received messagePublished event: ', event);
+     *     });
+     *   })
+     *   .catch(function(error) {
+     *     console.log('Unexpected error', error);
+     *   });
+     */
+    async stream(arg) {
+        await this.ensureReady();
+        let opts = decompose(arg);
+        let streamDescriptor;
+        if (opts.mode === 'create_new') {
+            streamDescriptor = await this._createStream(opts.id, opts.ttl);
+        }
+        else {
+            let streamFromInMemoryCache = this.getCached(opts.id, syncstream_1.SyncStream.type);
+            if (streamFromInMemoryCache) {
+                return new syncstream_1.SyncStream(streamFromInMemoryCache);
+            }
+            else {
+                try {
+                    streamDescriptor = await this._getStream(opts.id);
+                }
+                catch (err) {
+                    if (err.status !== 404 || opts.mode === 'open_existing') {
+                        throw err;
+                    }
+                    else {
+                        try {
+                            streamDescriptor = await this._createStream(opts.id, opts.ttl);
+                        }
+                        catch (err) {
+                            if (err.status === 409) {
+                                return this.stream(arg);
+                            }
+                            else {
+                                throw err;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        this.storeRootInSessionCache(syncstream_1.SyncStream.type, opts.id, streamDescriptor);
+        const streamRemovalHandler = (type, sid, uniqueName) => this.removeFromCacheAndSession(type, sid, uniqueName);
+        let syncStreamImpl = new syncstream_1.SyncStreamImpl(this.services, streamDescriptor, streamRemovalHandler);
+        syncStreamImpl = this.entities.store(syncStreamImpl);
+        return new syncstream_1.SyncStream(syncStreamImpl);
+    }
+    /**
+     * Gracefully shutdown the libray
+     * Currently it is not properly implemented and being used only in tests
+     * But should be made a part of public API
+     * @private
+     */
+    async shutdown() {
+        await this.services.subscriptions.shutdown();
+        await this.services.twilsock.disconnect();
+    }
+    /**
+     * Set new authentication token.
+     * @param {String} token New token to set.
+     * @return {Promise<void>}
+     * @public
+     */
+    updateToken(token) {
+        if (!token) {
+            return Promise.reject(new Error('A valid Twilio token should be provided'));
+        }
+        return this.services.twilsock.updateToken(token);
+    }
+    /**
+     * For Flex customers only. Establishes a long-running query against Flex data wherein the returned
+     * result set is updated whenever new (or updated) records match the given expression. Updated results
+     * are presented row-by-row according to the lifetime of the returned LiveQuery object.
+     *
+     * @param indexName {String} Must specify one of the Flex data classes for which Live Queries are available.
+     * @param queryExpression {String} A query expression to be executed against the given data index.
+     * Please review <a href="https://www.twilio.com/docs/sync/live-query" target="_blank">Live Query Language</a>
+     * page for Sync Client limits and full list of operators currently supported in query expressions.
+     *
+     * @return {Promise<LiveQuery>} a promise that resolves when the query has been successfully executed.
+     * @public
+     * @example
+     * syncClient.liveQuery('tr-worker', 'data.attributes.worker_name == "Bob"')
+     *     .then(function(args) {
+     *        console.log('Subscribed to live data updates for worker Bob');
+     *        let items = args.getItems();
+     *        Object.entries(items).forEach(([key, value]) => {
+     *          console.log('Search result item key: ' + key);
+     *          console.log('Search result item value: ' + value);
+     *        });
+     *     })
+     *     .catch(function(err) {
+     *        console.log('Error when subscribing to live updates for worker Bob', err);
+     *     });
+     */
+    async liveQuery(indexName, queryExpression) {
+        await this.ensureReady();
+        if (!indexName || typeof indexName !== 'string') {
+            throw new Error('Index name must contain a non-empty string value');
+        }
+        let queryUri = new uri_1.UriBuilder(this.services.config.insightsUri)
+            .pathSegment(indexName)
+            .pathSegment('Items')
+            .build();
+        // send query to CDS to get server-generated sid and item list
+        let response = await livequery_2.queryItems({
+            network: this.services.network,
+            uri: queryUri,
+            queryString: queryExpression,
+            type: livequery_1.LiveQuery.type
+        });
+        let liveQueryImpl = this.getCached(response.query_id, livequery_1.LiveQuery.type);
+        if (!liveQueryImpl) {
+            let descriptor = this._getLiveQuery(response.query_id);
+            if (!descriptor) {
+                descriptor = {
+                    indexName,
+                    queryExpression,
+                    sid: response.query_id,
+                    queryUri,
+                    last_event_id: response.last_event_id
+                };
+            }
+            const liveQueryRemovalHandler = (type, sid, uniqueName) => this.removeFromCacheAndSession(type, sid, uniqueName);
+            liveQueryImpl = new livequery_1.LiveQueryImpl(descriptor, this.services, liveQueryRemovalHandler, response.items);
+        }
+        this.storeRootInSessionCache(livequery_1.LiveQuery.type, response.query_id, liveQueryImpl.liveQueryDescriptor);
+        liveQueryImpl = this.entities.store(liveQueryImpl);
+        return new livequery_1.LiveQuery(liveQueryImpl);
+    }
+    /**
+     * For Flex customers only. Creates a query object that can be used to issue one-time queries repeatedly
+     * against the target index.
+     *
+     * @param indexName {String} Must specify one of the Flex data classes for which Live Queries are available.
+     * @return {Promise<InstantQuery>} a promise which resolves after the InstantQuery is successfully created.
+     * @public
+     * @example
+     * syncClient.instantQuery('tr-worker')
+     *    .then(function(q) {
+     *        q.on('searchResult', function(items) {
+     *          Object.entries(items).forEach(([key, value]) => {
+     *             console.log('Search result item key: ' + key);
+     *             console.log('Search result item value: ' + value);
+     *          });
+     *       });
+     *    });
+     */
+    async instantQuery(indexName) {
+        await this.ensureReady();
+        let liveQueryCreator = (indexName, queryExpression) => {
+            return this.liveQuery(indexName, queryExpression);
+        };
+        const search = new livequery_1.InstantQuery({
+            indexName,
+            network: this.services.network,
+            insightsUri: this.services.config.insightsUri,
+            liveQueryCreator
+        });
+        return search;
+    }
+}
+exports.Client = Client;
+exports.SyncClient = Client;
+exports.default = Client;
+/**
+ * Indicates current state of connection between the client and Sync service.
+ * <p>Valid options are as follows:
+ * <li>'connecting' - client is offline and connection attempt is in process.
+ * <li>'connected' - client is online and ready.
+ * <li>'disconnecting' - client is going offline as disconnection is in process.
+ * <li>'disconnected' - client is offline and no connection attempt is in process.
+ * <li>'denied' - client connection is denied because of invalid JWT access token. User must refresh token in order to proceed.
+ * <li>'error' - client connection is in a permanent erroneous state. Client re-initialization is required.
+ * @typedef {('connecting'|'connected'|'disconnecting'|'disconnected'|'denied'|'error')} Client#ConnectionState
+ */
+/**
+ * These options can be passed to Client constructor.
+ * @typedef {Object} Client#ClientOptions
+ * @property {String} [logLevel='error'] - The level of logging to enable. Valid options
+ *   (from strictest to broadest): ['silent', 'error', 'warn', 'info', 'debug', 'trace'].
+ */
+/**
+ * Fired when connection state has been changed.
+ * @param {Client#ConnectionState} connectionState Contains current service connection state.
+ * @event Client#connectionStateChanged
+ * @example
+ * syncClient.on('connectionStateChanged', function(newState) {
+ *   console.log('Received new connection state: ' + newState);
+ * });
+ */
+/**
+ * Fired when connection is interrupted by unexpected reason
+ * @property {Object} error - connection error details
+ * @property {Boolean} error.terminal - twilsock will stop connection attempts
+ * @property {String} error.message - root cause
+ * @property {Number} [error.httpStatusCode] - http status code if available
+ * @property {Number} [error.errorCode] - Twilio public error code if available
+ * @event Client#connectionError
+ * @example
+ * syncClient.on('connectionError', function(connectionError) {
+ *   console.log('Connection was interrupted: ' + connectionError.message +
+ *     ' (isTerminal: ' + connectionError.terminal')');
+ * });
+ */
+/**
+ * Options for opening a Sync Object.
+ * @typedef {Object} Client#OpenOptions
+ * @property {String} [id] Sync object SID or unique name.
+ * @property {'open_or_create' | 'open_existing' | 'create_new'} [mode='open_or_create'] - The mode for opening the Sync object:
+ * <li>'open_or_create' - reads a Sync object or creates one if it does not exist.
+ * <li>'open_existing' - reads an existing Sync object. The promise is rejected if the object does not exist.
+ * <li>'create_new' - creates a new Sync object. If the <i>id</i> property is specified, it will be used as the unique name.
+ * @property {Number} [ttl] - The time-to-live of the Sync object in seconds. This is applied only if the object is created.
+ * @property {Object} [value={ }] - The initial value for the Sync Document (only applicable to Documents).
+ * @example <caption>The following example is applicable to all Sync objects
+ * (i.e., <code>syncClient.document(), syncClient.list(), syncClient.map(), syncClient.stream()</code>)</caption>
+ * // Attempts to open an existing Document with unique name 'MyDocument'
+ * // If no such Document exists, the promise is rejected
+ * syncClient.document({
+ *     id: 'MyDocument',
+ *     mode: 'open_existing'
+ *   })
+ *   .then(...)
+ *   .catch(...);
+ *
+ * // Attempts to create a new Document with unique name 'MyDocument', TTL of 24 hours and initial value { name: 'John Smith' }
+ * // If such a Document already exists, the promise is rejected
+ * syncClient.document({
+ *     id: 'MyDocument',
+ *     mode: 'create_new',
+ *     ttl: 86400
+ *     value: { name: 'John Smith' } // the `value` property is only applicable for Documents
+ *   })
+ *   .then(...)
+ *   .catch(...);
+ */
+/**
+ * Fired when the access token is about to expire and needs to be updated.
+ * The trigger takes place three minutes before the JWT access token expiry.
+ * For long living applications, you should refresh the token when either <code>tokenAboutToExpire</code> or
+ * <code>tokenExpired</code> events occur; handling just one of them is sufficient.
+ * @event Client#tokenAboutToExpire
+ * @type {void}
+ * @example <caption>The following example illustrates access token refresh</caption>
+ * syncClient.on('tokenAboutToExpire', function() {
+ *   // Obtain a JWT access token: https://www.twilio.com/docs/sync/identity-and-access-tokens
+ *   var token = '<your-access-token-here>';
+ *   syncClient.updateToken(token);
+ * });
+ */
+/**
+ * Fired when the access token is expired.
+ * In case the token is not refreshed, all subsequent Sync operations will fail and the client will disconnect.
+ * For long living applications, you should refresh the token when either <code>tokenAboutToExpire</code> or
+ * <code>tokenExpired</code> events occur; handling just one of them is sufficient.
+ * @event Client#tokenExpired
+ * @type {void}
+ */
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/clientInfo.js":
+/*!****************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/clientInfo.js ***!
+  \****************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const platform = __webpack_require__(/*! platform */ "./node_modules/platform/platform.js");
+class ClientInfo {
+    constructor(version) {
+        this.sdk = 'js';
+        this.sdkVer = version;
+        this.os = platform.os.family;
+        this.osVer = platform.os.version;
+        this.pl = platform.name;
+        this.plVer = platform.version;
+    }
+}
+exports.ClientInfo = ClientInfo;
+exports.default = ClientInfo;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/closeable.js":
+/*!***************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/closeable.js ***!
+  \***************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+const uuidv4 = __webpack_require__(/*! uuid */ "./node_modules/uuid/index.js");
+class Closeable extends events_1.EventEmitter {
+    constructor() {
+        super();
+        this.closed = false;
+        this.uuid = uuidv4();
+    }
+    get listenerUuid() {
+        return this.uuid;
+    }
+    close() {
+        this.removeAllListeners();
+        this.closed = true;
+    }
+    ensureNotClosed() {
+        if (this.closed) {
+            throw new Error('Invalid operation on closed object');
+        }
+    }
+}
+exports.Closeable = Closeable;
+exports.default = Closeable;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/configuration.js":
+/*!*******************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/configuration.js ***!
+  \*******************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const SUBSCRIPTIONS_PATH = '/v4/Subscriptions';
+const MAPS_PATH = '/v3/Maps';
+const LISTS_PATH = '/v3/Lists';
+const DOCUMENTS_PATH = '/v3/Documents';
+const STREAMS_PATH = '/v3/Streams';
+const INSIGHTS_PATH = '/v3/Insights';
+function getWithDefault(container, key, defaultValue) {
+    if (container && typeof container[key] !== 'undefined') {
+        return container[key];
+    }
+    return defaultValue;
+}
+/**
+ * Settings container for Sync library
+ */
+class Configuration {
+    /**
+     * @param {Object} options
+     */
+    constructor(options = {}) {
+        const region = options.region || 'us1';
+        const defaultCdsUrl = `https://cds.${region}.twilio.com`;
+        const baseUri = options.cdsUri || defaultCdsUrl;
+        this.settings = {
+            subscriptionsUri: baseUri + SUBSCRIPTIONS_PATH,
+            documentsUri: baseUri + DOCUMENTS_PATH,
+            listsUri: baseUri + LISTS_PATH,
+            mapsUri: baseUri + MAPS_PATH,
+            streamsUri: baseUri + STREAMS_PATH,
+            insightsUri: baseUri + INSIGHTS_PATH,
+            sessionStorageEnabled: getWithDefault(options.Sync, 'enableSessionStorage', true)
+        };
+    }
+    get subscriptionsUri() {
+        return this.settings.subscriptionsUri;
+    }
+    get documentsUri() {
+        return this.settings.documentsUri;
+    }
+    get listsUri() {
+        return this.settings.listsUri;
+    }
+    get mapsUri() {
+        return this.settings.mapsUri;
+    }
+    get streamsUri() {
+        return this.settings.streamsUri;
+    }
+    get insightsUri() {
+        return this.settings.insightsUri;
+    }
+    get backoffConfig() {
+        return this.settings.backoffConfig || {};
+    }
+    get sessionStorageEnabled() {
+        return this.settings.sessionStorageEnabled;
+    }
+}
+exports.Configuration = Configuration;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/entitiesCache.js":
+/*!*******************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/entitiesCache.js ***!
+  \*******************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+/**
+ * Container for entities which are known by the client
+ * It's needed for deduplication when client obtain the same object several times
+ */
+class EntitiesCache {
+    constructor() {
+        this.names = new Map();
+        this.entities = new Map();
+    }
+    store(entity) {
+        let stored = this.entities.get(entity.sid);
+        if (stored) {
+            return stored;
+        }
+        this.entities.set(entity.sid, entity);
+        if (entity.uniqueName) {
+            this.names.set(entity.type + '::' + entity.uniqueName, entity.sid);
+        }
+        return entity;
+    }
+    getResolved(id, type) {
+        let resolvedSid = this.names.get(type + '::' + id);
+        return resolvedSid ? this.entities.get(resolvedSid) : null;
+    }
+    get(id, type) {
+        return this.entities.get(id) || this.getResolved(id, type) || null;
+    }
+    remove(sid) {
+        let cached = this.entities.get(sid);
+        if (cached) {
+            this.entities.delete(sid);
+            if (cached.uniqueName) {
+                this.names.delete(cached.type + '::' + cached.uniqueName);
+            }
+        }
+    }
+}
+exports.EntitiesCache = EntitiesCache;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/entity.js":
+/*!************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/entity.js ***!
+  \************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+class SyncEntity {
+    constructor(services, removalHandler) {
+        this.services = services;
+        this.removalHandler = removalHandler;
+        this.subscriptionState = 'none';
+        this._attachedListeners = new Map();
+    }
+    _advanceLastEventId(eventId, revision) {
+    }
+    reportFailure(err) {
+        if (err.status === 404) {
+            // assume that 404 means that entity has been removed while we were away
+            this.onRemoved(false);
+        }
+        else {
+            this.broadcastEventToListeners('failure', err);
+        }
+    }
+    /**
+     * Subscribe to changes of data entity
+     * @private
+     */
+    _subscribe() {
+        this.services.router.subscribe(this.sid, this);
+    }
+    /**
+     * Unsubscribe from changes of current data entity
+     * @private
+     */
+    _unsubscribe() {
+        this.services.router.unsubscribe(this.sid);
+    }
+    _setSubscriptionState(newState) {
+        this.subscriptionState = newState;
+        this.broadcastEventToListeners('_subscriptionStateChanged', newState);
+    }
+    /**
+     * @public
+     */
+    close() {
+        this._unsubscribe();
+        if (this.removalHandler != null) {
+            this.removalHandler(this.type, this.sid, this.uniqueName);
+        }
+    }
+    attach(closeable) {
+        const uuid = closeable.listenerUuid;
+        const existingRecord = this._attachedListeners.get(uuid);
+        if (existingRecord) {
+            return;
+        }
+        if (!this._attachedListeners.size) {
+            // the first one to arrive
+            this._subscribe();
+        }
+        this._attachedListeners.set(uuid, closeable);
+    }
+    detach(listenerUuid) {
+        this._attachedListeners.delete(listenerUuid);
+        if (!this._attachedListeners.size) {
+            // last one out, turn off lights, shut the door
+            this.close(); // invokes unsubscribe and removal handler
+        }
+    }
+    broadcastEventToListeners(eventName, args) {
+        for (let listener of this._attachedListeners.values()) {
+            listener.emit(eventName, args);
+        }
+    }
+}
+exports.SyncEntity = SyncEntity;
+exports.default = SyncEntity;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/listitem.js":
+/*!**************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/listitem.js ***!
+  \**************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+/**
+ * @class
+ * @classdesc Represents an individual element in a Sync List.
+ * @alias ListItem
+ * @property {Number} index The index, within the containing List, of this item. This index is stable;
+ * even if lower-indexed Items are removed, this index will remain as is.
+ * @property {Object} value The contents of the item.
+ * @property {Date} dateUpdated Date when the List Item was last updated.
+ */
+class ListItem {
+    /**
+     * @private
+     * @constructor
+     * @param {Object} data Item descriptor
+     * @param {Number} data.index Item identifier
+     * @param {String} data.uri Item URI
+     * @param {Object} data.value Item data
+     */
+    constructor(data) {
+        this.data = data;
+    }
+    get uri() {
+        return this.data.uri;
+    }
+    get revision() {
+        return this.data.revision;
+    }
+    get lastEventId() {
+        return this.data.lastEventId;
+    }
+    get dateUpdated() {
+        return this.data.dateUpdated;
+    }
+    get dateExpires() {
+        return this.data.dateExpires;
+    }
+    get index() {
+        return this.data.index;
+    }
+    get value() {
+        return this.data.value;
+    }
+    /**
+     * @private
+     */
+    update(eventId, revision, value, dateUpdated) {
+        this.data.lastEventId = eventId;
+        this.data.revision = revision;
+        this.data.value = value;
+        this.data.dateUpdated = dateUpdated;
+        return this;
+    }
+    /**
+     * @private
+     */
+    updateDateExpires(dateExpires) {
+        this.data.dateExpires = dateExpires;
+    }
+}
+exports.ListItem = ListItem;
+exports.default = ListItem;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/livequery.js":
+/*!***************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/livequery.js ***!
+  \***************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const uri_1 = __webpack_require__(/*! ./utils/uri */ "./node_modules/twilio-sync/lib/utils/uri.js");
+const syncerror_1 = __webpack_require__(/*! ./utils/syncerror */ "./node_modules/twilio-sync/lib/utils/syncerror.js");
+const logger_1 = __webpack_require__(/*! ./utils/logger */ "./node_modules/twilio-sync/lib/utils/logger.js");
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+const entity_1 = __webpack_require__(/*! ./entity */ "./node_modules/twilio-sync/lib/entity.js");
+const closeable_1 = __webpack_require__(/*! ./closeable */ "./node_modules/twilio-sync/lib/closeable.js");
+const cache_1 = __webpack_require__(/*! ./cache */ "./node_modules/twilio-sync/lib/cache.js");
+class InsightsItem {
+}
+exports.InsightsItem = InsightsItem;
+class LiveQueryImpl extends entity_1.SyncEntity {
+    constructor(descriptor, services, removalHandler, items) {
+        super(services, removalHandler);
+        this.descriptor = descriptor;
+        this.cache = new cache_1.Cache();
+        if (items) {
+            items.forEach(item => {
+                this.cache.store(item.key, { key: item.key, value: item.data }, item.revision);
+            });
+        }
+    }
+    // public
+    get sid() {
+        return this.descriptor.sid;
+    }
+    // private extension of SyncEntity
+    get uniqueName() {
+        return null;
+    }
+    get type() {
+        return LiveQueryImpl.type;
+    }
+    static get type() {
+        return 'live_query';
+    }
+    get lastEventId() {
+        return this.descriptor.last_event_id;
+    }
+    get indexName() {
+        return this.descriptor.indexName;
+    }
+    get queryString() {
+        return this.descriptor.queryExpression;
+    }
+    // custom private props
+    get queryUri() {
+        return this.descriptor.queryUri;
+    }
+    get liveQueryDescriptor() {
+        return this.descriptor;
+    }
+    // dummy stub from iface
+    onRemoved() {
+    }
+    getItems() {
+        const dataByKey = {};
+        this.cache.forEach((key, item) => {
+            dataByKey[key] = item.value;
+        });
+        return dataByKey;
+    }
+    /**
+     * @private
+     */
+    _update(message, isStrictlyOrdered) {
+        switch (message.type) {
+            case 'live_query_item_updated':
+                this.handleItemMutated(message.item_key, message.item_data, message.item_revision);
+                break;
+            case 'live_query_item_removed':
+                this.handleItemRemoved(message.item_key, message.item_revision);
+                break;
+            case 'live_query_updated':
+                this.handleBatchUpdate(message.items);
+                break;
+        }
+        if (isStrictlyOrdered) {
+            this._advanceLastEventId(message.last_event_id);
+        }
+    }
+    handleItemMutated(key, value, revision) {
+        if (this.shouldIgnoreEvent(key, revision)) {
+            logger_1.default.trace(`Item ${key} update skipped, revision: ${revision}`);
+        }
+        else {
+            const newItem = { key, value };
+            this.cache.store(key, newItem, revision);
+            this.broadcastEventToListeners('itemUpdated', newItem);
+        }
+    }
+    handleItemRemoved(key, revision) {
+        const force = (revision === null);
+        if (this.shouldIgnoreEvent(key, revision)) {
+            logger_1.default.trace(`Item ${key} delete skipped, revision: ${revision}`);
+        }
+        else {
+            this.cache.delete(key, revision, force);
+            this.broadcastEventToListeners('itemRemoved', { key });
+        }
+    }
+    handleBatchUpdate(items) {
+        // preprocess item set for easy key-based access (it's a one-time constant time operation)
+        let newItems = {};
+        if (items != null) {
+            items.forEach(item => {
+                newItems[item.key] = {
+                    data: item.data,
+                    revision: item.revision
+                };
+            });
+        }
+        // go through existing items and generate update/remove events for them
+        this.cache.forEach((key, item) => {
+            const newItem = newItems[key];
+            if (newItem != null) {
+                this.handleItemMutated(key, newItem.data, newItem.revision);
+            }
+            else {
+                this.handleItemRemoved(key, null); // force deletion w/o revision
+            }
+            // once item is handled, remove it from incoming array
+            delete newItems[key];
+        });
+        // once we handled all the known items, handle remaining pack
+        for (let key in newItems) {
+            this.handleItemMutated(key, newItems[key].data, newItems[key].revision);
+        }
+    }
+    shouldIgnoreEvent(key, eventId) {
+        return key != null && eventId != null && this.cache.isKnown(key, eventId);
+    }
+    /**
+     * @private
+     */
+    _advanceLastEventId(eventId, revision) {
+        // LiveQuery is not revisioned in any way, so simply ignore second param and act upon lastEventId only
+        if (this.lastEventId < eventId) {
+            this.descriptor.last_event_id = eventId;
+        }
+    }
+}
+exports.LiveQueryImpl = LiveQueryImpl;
+async function queryItems(params) {
+    let { network, queryString, uri, type } = params;
+    if (queryString == null) { // should not be null or undefined
+        throw new syncerror_1.SyncError(`Invalid query`, 400, 54507);
+    }
+    const liveQueryRequestBody = {
+        query_string: queryString // raw query string (like `key == "value" AND key2 != "value2"`)
+    };
+    if (type === LiveQuery.type) {
+        liveQueryRequestBody.type = type;
+    }
+    let response = await network.post(uri, liveQueryRequestBody, undefined, true);
+    return response.body;
+}
+exports.queryItems = queryItems;
+/**
+ * @class
+ * @alias LiveQuery
+ * @classdesc Represents a long-running query against Flex data wherein the returned result set
+ *     subsequently receives pushed updates whenever new (or updated) records would match the
+ *     given expression. Updated results are presented row-by-row until this query is explicitly
+ *     closed.
+ *
+ *     Use the {@link Client#liveQuery} method to create a live query.
+ *
+ * @property {String} sid The immutable identifier of this query object, assigned by the system.
+ *
+ * @fires LiveQuery#itemUpdated
+ * @fires LiveQuery#itemRemoved
+ */
+class LiveQuery extends closeable_1.Closeable {
+    /**
+     * @private
+     */
+    constructor(liveQueryImpl) {
+        super();
+        this.liveQueryImpl = liveQueryImpl;
+        this.liveQueryImpl.attach(this);
+    }
+    // private props
+    static get type() {
+        return LiveQueryImpl.type;
+    }
+    get type() {
+        return LiveQueryImpl.type;
+    }
+    get lastEventId() {
+        return this.liveQueryImpl.lastEventId;
+    }
+    // public
+    get sid() {
+        return this.liveQueryImpl.sid;
+    }
+    /**
+     * Closes this query instance and unsubscribes from further service events.
+     * This will eventually stop the physical inflow of updates over the network, when all other instances of this query are closed as well.
+     * @public
+     */
+    close() {
+        super.close();
+        this.liveQueryImpl.detach(this.listenerUuid);
+    }
+    /**
+     * @returns {LiveQuery#ItemsSnapshot} A snapshot of items matching the current query expression.
+     * @public
+     */
+    getItems() {
+        this.ensureNotClosed();
+        return this.liveQueryImpl.getItems();
+    }
+}
+exports.LiveQuery = LiveQuery;
+/**
+ * @class
+ * @alias InstantQuery
+ * @classdesc Allows repetitive quick searches against a specific Flex data. Unlike a
+ * LiveQuery, this result set does not subscribe to any updates and therefore receives no events
+ * beyond the initial result set.
+ *
+ * Use the {@link Client#instantQuery} method to create an Instant Query.
+ *
+ * @fires InstantQuery#searchResult
+ */
+class InstantQuery extends events_1.EventEmitter {
+    /**
+     * @private
+     */
+    constructor(params) {
+        super();
+        this.queryExpression = null;
+        this.items = {};
+        Object.assign(this, params);
+        this.updateIndexName(params.indexName);
+    }
+    // private props
+    static get type() {
+        return 'instant_query';
+    }
+    get type() {
+        return InstantQuery.type;
+    }
+    /**
+     * Spawns a new search request. The result will be provided asynchronously via the {@link InstantQuery#event:searchResult}
+     * event.
+     * @param {String} queryExpression A query expression to be executed against the given data index. For more information
+     * on the syntax read {@link Client#liveQuery}.
+     * @returns {Promise<void>} A promise that resolves when query result has been received.
+     * @public
+     */
+    async search(queryExpression) {
+        this.items = {};
+        return queryItems({
+            network: this.network,
+            uri: this.queryUri,
+            queryString: queryExpression
+        })
+            .then(response => {
+            this.queryExpression = queryExpression;
+            if (response.items) {
+                response.items.forEach((item) => {
+                    this.items[item.key] = item.data;
+                });
+            }
+            this.emit('searchResult', this.getItems());
+        })
+            .catch(err => {
+            logger_1.default.error(`Error '${err.message}' while executing query '${queryExpression}'`);
+            this.queryExpression = null;
+            throw err;
+        });
+    }
+    /**
+     * Instantiates a LiveQuery object based on the last known query expression that was passed to the
+     * {@link InstantQuery#search} method. This LiveQuery will start receiving updates with new results,
+     * while current object can be still used to execute repetitive searches.
+     * @returns {Promise<LiveQuery>} A promise which resolves when the LiveQuery object is ready.
+     * @public
+     */
+    async subscribe() {
+        if (this.queryExpression == null) { // should not be null or undefined
+            return Promise.reject(new syncerror_1.SyncError(`Invalid query`, 400, 54507));
+        }
+        return this.liveQueryCreator(this.indexName, this.queryExpression);
+    }
+    /**
+     * @returns {LiveQuery#ItemsSnapshot} A snapshot of items matching current query expression.
+     * @public
+     */
+    getItems() {
+        return this.items;
+    }
+    /**
+     * Set new index name
+     * @param {String} indexName New index name to set
+     * @returns void
+     * @public
+     */
+    updateIndexName(indexName) {
+        if (!indexName || typeof indexName !== 'string') {
+            throw new Error('Index name must contain a non-empty string value');
+        }
+        this.indexName = indexName;
+        this.queryUri = this.generateQueryUri(this.indexName);
+    }
+    generateQueryUri(indexName) {
+        return new uri_1.UriBuilder(this.insightsUri)
+            .pathSegment(indexName)
+            .pathSegment('Items')
+            .build();
+    }
+}
+exports.InstantQuery = InstantQuery;
+exports.default = LiveQuery;
+/**
+ * @class InsightsItem
+ * @classdesc An individual result from a LiveQuery or InstantQuery result set.
+ * @property {String} key The identifier that maps to this item within the search result.
+ * @property {Object} value The contents of the item.
+ */
+/**
+ * A result set, i.e. a collection of items that matched a LiveQuery or InstantQuery expression. Each result is a
+ * key-value pair, where each key identifies its object uniquely. These results are equivalent to a set of
+ * {@link InsightsItem}-s.
+ * @typedef {Object.<string, Object>} LiveQuery#ItemsSnapshot
+ */
+/**
+ * Fired when an item has been added or updated.
+ * @event LiveQuery#itemUpdated
+ * @param {InsightsItem} item Updated item.
+ * @example
+ * liveQuery.on('itemUpdated', function(item) {
+ *   console.log('Item ' + item.key + ' was updated');
+ *   console.log('Item value: ', item.value);
+ * });
+ */
+/**
+ * Fired when an existing item has been removed.
+ * @event LiveQuery#itemRemoved
+ * @param {Object} args Arguments provided with the event.
+ * @param {String} args.key The key of the removed item.
+ * @example
+ * liveQuery.on('itemRemoved', function(args) {
+ *   console.log('Item ' + args.key + ' was removed');
+ * });
+ */
+/**
+ * Fired when a search result is ready.
+ * @event InstantQuery#searchResult
+ * @param {LiveQuery#ItemsSnapshot} items A snapshot of items matching current query expression.
+ * @example
+ * instantQuery.on('searchResult', function(items) {
+ *    Object.entries(items).forEach(([key, value]) => {
+ *      console.log('Search result item key: ' + key);
+ *      console.log('Search result item value: ' + value);
+ *    });
+ * });
+ */
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/mapitem.js":
+/*!*************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/mapitem.js ***!
+  \*************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+/**
+ * @class
+ * @classdesc Represents an individual element in a Sync Map.
+ * @alias MapItem
+ * @property {String} key The identifier that maps to this item within the containing Map.
+ * @property {Object} value The contents of the item.
+ * @property {Date} dateUpdated Date when the Map Item was last updated, given in UTC ISO 8601 format (e.g., '2018-04-26T15:23:19.732Z')
+ */
+class MapItem {
+    /**
+     * @private
+     * @constructor
+     */
+    constructor(descriptor) {
+        this.descriptor = descriptor;
+    }
+    get uri() {
+        return this.descriptor.url;
+    }
+    get revision() {
+        return this.descriptor.revision;
+    }
+    get lastEventId() {
+        return this.descriptor.last_event_id;
+    }
+    get dateExpires() {
+        return this.descriptor.date_expires;
+    }
+    get key() {
+        return this.descriptor.key;
+    }
+    get value() {
+        return this.descriptor.data;
+    }
+    get dateUpdated() {
+        return this.descriptor.date_updated;
+    }
+    /**
+     * @private
+     */
+    update(eventId, revision, value, dateUpdated) {
+        this.descriptor.last_event_id = eventId;
+        this.descriptor.revision = revision;
+        this.descriptor.data = value;
+        this.descriptor.date_updated = dateUpdated;
+        return this;
+    }
+    /**
+     * @private
+     */
+    updateDateExpires(dateExpires) {
+        this.descriptor.date_expires = dateExpires;
+    }
+}
+exports.MapItem = MapItem;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/mergingqueue.js":
+/*!******************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/mergingqueue.js ***!
+  \******************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+class MergingQueue {
+    constructor(inputMergingFunction) {
+        this.queuedRequests = [];
+        this.isRequestInFlight = false;
+        this.inputMergingFunction = inputMergingFunction;
+    }
+    add(input, requestFunction) {
+        let promise = new Promise((resolve, reject) => this.queuedRequests.push({ input, requestFunction, resolve, reject }));
+        this.wakeupQueue();
+        return promise;
+    }
+    squashAndAdd(input, requestFunction) {
+        let queueToSquash = this.queuedRequests;
+        this.queuedRequests = [];
+        let reducedInput;
+        if (queueToSquash.length > 0) {
+            reducedInput = queueToSquash.map(r => r.input).reduce(this.inputMergingFunction);
+            reducedInput = this.inputMergingFunction(reducedInput, input);
+        }
+        else {
+            reducedInput = input;
+        }
+        let promise = this.add(reducedInput, requestFunction);
+        queueToSquash.forEach(request => promise.then(request.resolve, request.reject));
+        return promise;
+    }
+    isEmpty() {
+        return this.queuedRequests.length === 0 && !this.isRequestInFlight;
+    }
+    wakeupQueue() {
+        if (this.queuedRequests.length === 0 || this.isRequestInFlight) {
+            return;
+        }
+        else {
+            let requestToExecute = this.queuedRequests.shift();
+            this.isRequestInFlight = true;
+            requestToExecute.requestFunction(requestToExecute.input)
+                .then(requestToExecute.resolve, requestToExecute.reject)
+                .then(__ => {
+                this.isRequestInFlight = false;
+                this.wakeupQueue();
+            });
+        }
+    }
+}
+exports.MergingQueue = MergingQueue;
+class NamespacedMergingQueue {
+    constructor(inputReducer) {
+        this.queueByNamespaceKey = new Map();
+        this.inputReducer = inputReducer;
+    }
+    async add(namespaceKey, input, requestFunction) {
+        return this.invokeQueueMethod(namespaceKey, queue => queue.add(input, requestFunction));
+    }
+    async squashAndAdd(namespaceKey, input, requestFunction) {
+        return this.invokeQueueMethod(namespaceKey, queue => queue.squashAndAdd(input, requestFunction));
+    }
+    async invokeQueueMethod(namespaceKey, queueMethodInvoker) {
+        if (!this.queueByNamespaceKey.has(namespaceKey)) {
+            this.queueByNamespaceKey.set(namespaceKey, new MergingQueue(this.inputReducer));
+        }
+        const queue = this.queueByNamespaceKey.get(namespaceKey);
+        const result = queueMethodInvoker(queue);
+        if (this.queueByNamespaceKey.get(namespaceKey).isEmpty()) {
+            this.queueByNamespaceKey.delete(namespaceKey);
+        }
+        return result;
+    }
+}
+exports.NamespacedMergingQueue = NamespacedMergingQueue;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/paginator.js":
+/*!***************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/paginator.js ***!
+  \***************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+/**
+ * @class Paginator
+ * @classdesc Pagination helper class.
+ *
+ * @property {Array} items Array of elements on current page.
+ * @property {Boolean} hasNextPage Indicates the existence of next page.
+ * @property {Boolean} hasPrevPage Indicates the existence of previous page.
+ */
+class Paginator {
+    /*
+    * @constructor
+    * @param {Array} items Array of element for current page.
+    * @param {Object} params
+    * @private
+    */
+    constructor(items, source, prevToken, nextToken) {
+        this.prevToken = prevToken;
+        this.nextToken = nextToken;
+        this.items = items;
+        this.source = source;
+    }
+    get hasNextPage() {
+        return !!this.nextToken;
+    }
+    get hasPrevPage() {
+        return !!this.prevToken;
+    }
+    /**
+     * Request next page.
+     * Does not modify existing object.
+     * @return {Promise<Paginator>}
+     */
+    async nextPage() {
+        if (!this.hasNextPage) {
+            throw new Error('No next page');
+        }
+        return this.source(this.nextToken);
+    }
+    /**
+     * Request previous page.
+     * Does not modify existing object.
+     * @return {Promise<Paginator>}
+     */
+    async prevPage() {
+        if (!this.hasPrevPage) {
+            throw new Error('No previous page');
+        }
+        return this.source(this.prevToken);
+    }
+}
+exports.Paginator = Paginator;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/router.js":
+/*!************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/router.js ***!
+  \************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const logger_1 = __webpack_require__(/*! ./utils/logger */ "./node_modules/twilio-sync/lib/utils/logger.js");
+const SYNC_DOCUMENT_NOTIFICATION_TYPE = 'com.twilio.rtd.cds.document';
+const SYNC_LIST_NOTIFICATION_TYPE = 'com.twilio.rtd.cds.list';
+const SYNC_MAP_NOTIFICATION_TYPE = 'com.twilio.rtd.cds.map';
+const SYNC_NOTIFICATION_TYPE = 'twilio.sync.event';
+/**
+ * @class Router
+ * @classdesc Routes all incoming messages to the consumers
+ */
+class Router {
+    constructor(params) {
+        this.config = params.config;
+        this.subscriptions = params.subscriptions;
+        this.notifications = params.notifications;
+        this.notifications.subscribe(SYNC_NOTIFICATION_TYPE);
+        this.notifications.subscribe(SYNC_DOCUMENT_NOTIFICATION_TYPE);
+        this.notifications.subscribe(SYNC_LIST_NOTIFICATION_TYPE);
+        this.notifications.subscribe(SYNC_MAP_NOTIFICATION_TYPE);
+        this.notifications.on('message', (messageType, payload) => this.onMessage(messageType, payload));
+        this.notifications.on('transportReady', isConnected => this.onConnectionStateChanged(isConnected));
+    }
+    /**
+     * Entry point for all incoming messages
+     * @param {String} type - Type of incoming message
+     * @param {Object} message - Message to route
+     */
+    onMessage(type, message) {
+        logger_1.default.trace('Notification type:', type, 'content:', message);
+        switch (type) {
+            case SYNC_DOCUMENT_NOTIFICATION_TYPE:
+            case SYNC_LIST_NOTIFICATION_TYPE:
+            case SYNC_MAP_NOTIFICATION_TYPE:
+                this.subscriptions.acceptMessage(message, false);
+                break;
+            case SYNC_NOTIFICATION_TYPE:
+                this.subscriptions.acceptMessage(message, true);
+                break;
+        }
+    }
+    /**
+     * Subscribe for events
+     */
+    subscribe(sid, entity) {
+        this.subscriptions.add(sid, entity);
+    }
+    /**
+     * Unsubscribe from events
+     */
+    unsubscribe(sid) {
+        this.subscriptions.remove(sid);
+    }
+    /**
+     * Handle transport establishing event
+     * If we have any subscriptions - we should check object for modifications
+     */
+    onConnectionStateChanged(isConnected) {
+        this.subscriptions.onConnectionStateChanged(isConnected);
+    }
+}
+exports.Router = Router;
+exports.default = Router;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/services/network.js":
+/*!**********************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/services/network.js ***!
+  \**********************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const uuid = __webpack_require__(/*! uuid */ "./node_modules/uuid/index.js");
+const syncerror_1 = __webpack_require__(/*! ../utils/syncerror */ "./node_modules/twilio-sync/lib/utils/syncerror.js");
+const logger_1 = __webpack_require__(/*! ../utils/logger */ "./node_modules/twilio-sync/lib/utils/logger.js");
+const operation_retrier_1 = __webpack_require__(/*! operation-retrier */ "./node_modules/operation-retrier/lib/index.js");
+const twilsock_1 = __webpack_require__(/*! twilsock */ "./node_modules/twilsock/lib/index.js");
+const MINIMUM_RETRY_DELAY = 4000;
+const MAXIMUM_RETRY_DELAY = 60000;
+const MAXIMUM_ATTEMPTS_TIME = 90000;
+const RETRY_DELAY_RANDOMNESS = 0.2;
+function messageFromErrorBody(transportError) {
+    if (transportError.body) {
+        if (transportError.body.message) {
+            return transportError.body.message;
+        }
+    }
+    switch (transportError.status) {
+        case 429:
+            return 'Throttled by server';
+        case 404:
+            return 'Not found from server';
+        default:
+            return 'Error from server';
+    }
+}
+function codeFromErrorBody(trasportError) {
+    if (trasportError.body) {
+        return trasportError.body.code;
+    }
+    return 0;
+}
+function mapTransportError(transportError) {
+    if (transportError.status === 409) {
+        return new syncerror_1.SyncNetworkError(messageFromErrorBody(transportError), transportError.status, codeFromErrorBody(transportError), transportError.body);
+    }
+    else if (transportError.status) {
+        return new syncerror_1.SyncError(messageFromErrorBody(transportError), transportError.status, codeFromErrorBody(transportError));
+    }
+    else if (transportError instanceof twilsock_1.TransportUnavailableError) {
+        return transportError;
+    }
+    else {
+        return new syncerror_1.SyncError(transportError.message, 0, 0);
+    }
+}
+/**
+ * @classdesc Incapsulates network operations to make it possible to add some optimization/caching strategies
+ */
+class NetworkService {
+    constructor(clientInfo, config, transport) {
+        this.clientInfo = clientInfo;
+        this.config = config;
+        this.transport = transport;
+    }
+    createHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'Twilio-Sync-Client-Info': JSON.stringify(this.clientInfo),
+            'Twilio-Request-Id': 'RQ' + uuid.v4().replace(/-/g, '')
+        };
+    }
+    backoffConfig() {
+        return Object.assign({
+            min: MINIMUM_RETRY_DELAY,
+            max: MAXIMUM_RETRY_DELAY,
+            maxAttemptsTime: MAXIMUM_ATTEMPTS_TIME,
+            randomness: RETRY_DELAY_RANDOMNESS
+        }, this.config.backoffConfig);
+    }
+    executeWithRetry(request, retryWhenThrottled = true) {
+        return new Promise((resolve, reject) => {
+            let codesToRetryOn = [502, 503, 504];
+            if (retryWhenThrottled) {
+                codesToRetryOn.push(429);
+            }
+            let retrier = new operation_retrier_1.Retrier(this.backoffConfig());
+            retrier.on('attempt', () => {
+                request()
+                    .then(result => retrier.succeeded(result))
+                    .catch(err => {
+                    if (codesToRetryOn.includes(err.status)) {
+                        let delayOverride = parseInt(err.headers ? err.headers['Retry-After'] : null);
+                        retrier.failed(mapTransportError(err), isNaN(delayOverride) ? null : delayOverride * 1000);
+                    }
+                    else if (err.message === 'Twilsock disconnected') {
+                        // Ugly hack. We must make a proper exceptions for twilsock
+                        retrier.failed(mapTransportError(err));
+                    }
+                    else {
+                        // Fatal error
+                        retrier.removeAllListeners();
+                        retrier.cancel();
+                        reject(mapTransportError(err));
+                    }
+                });
+            });
+            retrier.on('succeeded', result => {
+                resolve(result);
+            });
+            retrier.on('cancelled', err => reject(mapTransportError(err)));
+            retrier.on('failed', err => reject(mapTransportError(err)));
+            retrier.start();
+        });
+    }
+    /**
+     * Make a GET request by given URI
+     * @Returns Promise<Response> Result of successful get request
+     */
+    get(uri) {
+        let headers = this.createHeaders();
+        logger_1.default.debug('GET', uri, 'ID:', headers['Twilio-Request-Id']);
+        return this.executeWithRetry(() => this.transport.get(uri, headers), true);
+    }
+    post(uri, body, revision, retryWhenThrottled = false) {
+        let headers = this.createHeaders();
+        if (typeof revision !== 'undefined' && revision !== null) {
+            headers['If-Match'] = revision;
+        }
+        logger_1.default.debug('POST', uri, 'ID:', headers['Twilio-Request-Id']);
+        return this.executeWithRetry(() => this.transport.post(uri, headers, body), retryWhenThrottled);
+    }
+    put(uri, body, revision) {
+        let headers = this.createHeaders();
+        if (typeof revision !== 'undefined' && revision !== null) {
+            headers['If-Match'] = revision;
+        }
+        logger_1.default.debug('PUT', uri, 'ID:', headers['Twilio-Request-Id']);
+        return this.executeWithRetry(() => this.transport.put(uri, headers, body), false);
+    }
+    delete(uri) {
+        let headers = this.createHeaders();
+        logger_1.default.debug('DELETE', uri, 'ID:', headers['Twilio-Request-Id']);
+        return this.executeWithRetry(() => this.transport.delete(uri, headers), false);
+    }
+}
+exports.NetworkService = NetworkService;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/services/storage.js":
+/*!**********************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/services/storage.js ***!
+  \**********************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+class SessionStorage {
+    constructor(config, storage) {
+        this.config = config;
+        this.storageId = null;
+        try {
+            this.storage = storage || sessionStorage;
+        }
+        catch (e) {
+        }
+    }
+    storageKey(type, key) {
+        return `${this.storageId}::${type}::${key}`;
+    }
+    get isReady() {
+        return this.config.sessionStorageEnabled && !!this.storageId;
+    }
+    updateStorageId(storageId) {
+        this.storageId = storageId;
+    }
+    store(type, id, value) {
+        if (!this.isReady) {
+            return null;
+        }
+        return this._store(this.storageKey(type, id), value);
+    }
+    read(type, id) {
+        if (!this.isReady) {
+            return null;
+        }
+        return this._read(this.storageKey(type, id));
+    }
+    remove(type, sid, uniqueName) {
+        if (!this.isReady) {
+            return null;
+        }
+        try {
+            this.storage.removeItem(this.storageKey(type, sid));
+            if (uniqueName) {
+                this.storage.removeItem(this.storageKey(type, uniqueName));
+            }
+        }
+        catch (e) {
+        }
+    }
+    update(type, sid, uniqueName, patch) {
+        if (!this.isReady) {
+            return null;
+        }
+        // Currently cache may have root stored twice - by sid and by uniqueName
+        // Maybe need to create some index if needed
+        this._apply(this.storageKey(type, sid), patch);
+        if (uniqueName) {
+            this._apply(this.storageKey(type, uniqueName), patch);
+        }
+    }
+    _store(key, value) {
+        try {
+            this.storage.setItem(key, JSON.stringify(value));
+        }
+        catch (e) {
+        }
+    }
+    _read(key) {
+        try {
+            let storedData = this.storage.getItem(key);
+            if (storedData) {
+                return JSON.parse(storedData);
+            }
+        }
+        catch (e) {
+        }
+        return null;
+    }
+    _apply(key, patch) {
+        let value = this._read(key);
+        if (!value) {
+            return false;
+        }
+        this._store(key, Object.assign(value, patch));
+    }
+}
+exports.SessionStorage = SessionStorage;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/streams/syncstream.js":
+/*!************************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/streams/syncstream.js ***!
+  \************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const entity_1 = __webpack_require__(/*! ../entity */ "./node_modules/twilio-sync/lib/entity.js");
+const sanitize_1 = __webpack_require__(/*! ../utils/sanitize */ "./node_modules/twilio-sync/lib/utils/sanitize.js");
+const closeable_1 = __webpack_require__(/*! ../closeable */ "./node_modules/twilio-sync/lib/closeable.js");
+class SyncStreamImpl extends entity_1.SyncEntity {
+    /**
+     * @private
+     */
+    constructor(services, descriptor, removalHandler) {
+        super(services, removalHandler);
+        this.descriptor = descriptor;
+    }
+    // private props
+    get uri() {
+        return this.descriptor.url;
+    }
+    get links() {
+        return this.descriptor.links;
+    }
+    static get type() {
+        return 'stream';
+    }
+    get dateExpires() {
+        return this.descriptor.date_expires;
+    }
+    get type() {
+        return 'stream';
+    }
+    get lastEventId() {
+        return null;
+    }
+    // below properties are specific to Insights only
+    get indexName() {
+        return undefined;
+    }
+    get queryString() {
+        return undefined;
+    }
+    // public props, documented along with class description
+    get sid() {
+        return this.descriptor.sid;
+    }
+    get uniqueName() {
+        return this.descriptor.unique_name || null;
+    }
+    async publishMessage(value) {
+        const requestBody = { data: value };
+        const response = await this.services.network.post(this.links.messages, requestBody);
+        const responseBody = response.body;
+        const event = this._handleMessagePublished(responseBody.sid, value, false);
+        return event;
+    }
+    async setTtl(ttl) {
+        sanitize_1.validateMandatoryTtl(ttl);
+        try {
+            const requestBody = { ttl: ttl };
+            const response = await this.services.network.post(this.uri, requestBody);
+            this.descriptor.date_expires = response.body.date_expires;
+        }
+        catch (error) {
+            if (error.status === 404) {
+                this.onRemoved(false);
+            }
+            throw error;
+        }
+    }
+    async removeStream() {
+        await this.services.network.delete(this.uri);
+        this.onRemoved(true);
+    }
+    /**
+     * Handle event from the server
+     * @private
+     */
+    _update(update) {
+        switch (update.type) {
+            case 'stream_message_published': {
+                this._handleMessagePublished(update.message_sid, update.message_data, true);
+                break;
+            }
+            case 'stream_removed': {
+                this.onRemoved(false);
+                break;
+            }
+        }
+    }
+    _handleMessagePublished(sid, data, remote) {
+        const event = {
+            sid: sid,
+            value: data
+        };
+        this.broadcastEventToListeners('messagePublished', { message: event, isLocal: !remote });
+        return event;
+    }
+    onRemoved(isLocal) {
+        this._unsubscribe();
+        this.removalHandler(this.type, this.sid, this.uniqueName);
+        this.broadcastEventToListeners('removed', { isLocal: isLocal });
+    }
+}
+exports.SyncStreamImpl = SyncStreamImpl;
+/**
+ * @class
+ * @alias Stream
+ * @classdesc A Sync primitive for pub-sub messaging. Stream Messages are not persisted, exist
+ *     only in transit, and will be dropped if (due to congestion or network anomalies) they
+ *     cannot be delivered promptly. Use the {@link Client#stream} method to obtain a reference to a Sync Message Stream.
+ * @property {String} sid The immutable system-assigned identifier of this stream. Never null.
+ * @property {String} [uniqueName=null] A unique identifier optionally assigned to the stream on creation.
+ *
+ * @fires Stream#messagePublished
+ * @fires Stream#removed
+ */
+class SyncStream extends closeable_1.default {
+    constructor(syncStreamImpl) {
+        super();
+        this.syncStreamImpl = syncStreamImpl;
+        this.syncStreamImpl.attach(this);
+    }
+    // private props
+    get uri() {
+        return this.syncStreamImpl.uri;
+    }
+    get links() {
+        return this.syncStreamImpl.links;
+    }
+    static get type() {
+        return SyncStreamImpl.type;
+    }
+    get dateExpires() {
+        return this.syncStreamImpl.dateExpires;
+    }
+    get type() {
+        return SyncStreamImpl.type;
+    }
+    get lastEventId() {
+        return null;
+    }
+    // public props, documented along with class description
+    get sid() {
+        return this.syncStreamImpl.sid;
+    }
+    get uniqueName() {
+        return this.syncStreamImpl.uniqueName;
+    }
+    /**
+     * Publish a Message to the Stream. The system will attempt delivery to all online subscribers.
+     * @param {Object} value The body of the dispatched message. Maximum size in serialized JSON: 4KB.
+     * A rate limit applies to this operation, refer to the [Sync API documentation]{@link https://www.twilio.com/docs/api/sync} for details.
+     * @return {Promise<StreamMessage>} A promise which resolves after the message is successfully published
+     *   to the Sync service. Resolves irrespective of ultimate delivery to any subscribers.
+     * @public
+     * @example
+     * stream.publishMessage({ x: 42, y: 123 })
+     *   .then(function(message) {
+     *     console.log('Stream publishMessage() successful, message SID:' + message.sid);
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Stream publishMessage() failed', error);
+     *   });
+     */
+    async publishMessage(value) {
+        this.ensureNotClosed();
+        return this.syncStreamImpl.publishMessage(value);
+    }
+    /**
+     * Update the time-to-live of the stream.
+     * @param {Number} ttl Specifies the TTL in seconds after which the stream is subject to automatic deletion. The value 0 means infinity.
+     * @return {Promise<void>} A promise that resolves after the TTL update was successful.
+     * @public
+     * @example
+     * stream.setTtl(3600)
+     *   .then(function() {
+     *     console.log('Stream setTtl() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Stream setTtl() failed', error);
+     *   });
+     */
+    async setTtl(ttl) {
+        this.ensureNotClosed();
+        return this.syncStreamImpl.setTtl(ttl);
+    }
+    /**
+     * Permanently delete this Stream.
+     * @return {Promise<void>} A promise which resolves after the Stream is successfully deleted.
+     * @public
+     * @example
+     * stream.removeStream()
+     *   .then(function() {
+     *     console.log('Stream removeStream() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Stream removeStream() failed', error);
+     *   });
+     */
+    async removeStream() {
+        this.ensureNotClosed();
+        return this.syncStreamImpl.removeStream();
+    }
+    /**
+     * Conclude work with the stream instance and remove all event listeners attached to it.
+     * Any subsequent operation on this object will be rejected with error.
+     * Other local copies of this stream will continue operating and receiving events normally.
+     * @public
+     * @example
+     * stream.close();
+     */
+    close() {
+        super.close();
+        this.syncStreamImpl.detach(this.listenerUuid);
+    }
+}
+exports.SyncStream = SyncStream;
+exports.default = SyncStream;
+/**
+ * @class StreamMessage
+ * @classdesc Stream Message descriptor.
+ * @property {String} sid Contains Stream Message SID.
+ * @property {Object} value Contains Stream Message value.
+ */
+/**
+ * Fired when a Message is published to the Stream either locally or by a remote actor.
+ * @event Stream#messagePublished
+ * @param {Object} args Arguments provided with the event.
+ * @param {StreamMessage} args.message Published message.
+ * @param {Boolean} args.isLocal Equals 'true' if message was published by local code, 'false' otherwise.
+ * @example
+ * stream.on('messagePublished', function(args) {
+ *   console.log('Stream message published');
+ *   console.log('Message SID: ' + args.message.sid);
+ *   console.log('Message value: ', args.message.value);
+ *   console.log('args.isLocal:', args.isLocal);
+ * });
+ */
+/**
+ * Fired when a stream is removed entirely, whether the remover was local or remote.
+ * @event Stream#removed
+ * @param {Object} args Arguments provided with the event.
+ * @param {Boolean} args.isLocal Equals 'true' if stream was removed by local code, 'false' otherwise.
+ * @example
+ * stream.on('removed', function(args) {
+ *   console.log('Stream ' + stream.sid + ' was removed');
+ *   console.log('args.isLocal:', args.isLocal);
+ * });
+ */
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/subscriptions.js":
+/*!*******************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/subscriptions.js ***!
+  \*******************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const operation_retrier_1 = __webpack_require__(/*! operation-retrier */ "./node_modules/operation-retrier/lib/index.js");
+const syncerror_1 = __webpack_require__(/*! ./utils/syncerror */ "./node_modules/twilio-sync/lib/utils/syncerror.js");
+const logger_1 = __webpack_require__(/*! ./utils/logger */ "./node_modules/twilio-sync/lib/utils/logger.js");
+const twilsock_1 = __webpack_require__(/*! twilsock */ "./node_modules/twilsock/lib/index.js");
+/**
+ * A data container used by the Subscriptions class to track subscribed entities' local
+ * representations and their state.
+ */
+class SubscribedEntity {
+    constructor(entity) {
+        this.localObject = entity;
+        this.pendingCorrelationId = null;
+        this.pendingAction = null;
+        this.established = false;
+        this.retryCount = 0;
+    }
+    get sid() {
+        return this.localObject.sid;
+    }
+    get type() {
+        return this.localObject.type;
+    }
+    get lastEventId() {
+        return this.localObject.lastEventId;
+    }
+    // below properties are specific to Insights only
+    get indexName() {
+        return this.localObject.indexName;
+    }
+    get queryString() {
+        return this.localObject.queryString;
+    }
+    get isEstablished() {
+        return this.established;
+    }
+    update(event, isStrictlyOrdered) {
+        this.localObject._update(event, isStrictlyOrdered);
+    }
+    updatePending(action, correlationId) {
+        this.pendingAction = action;
+        this.pendingCorrelationId = correlationId;
+    }
+    reset() {
+        this.updatePending(null, null);
+        this.retryCount = 0;
+        this.established = false;
+        this.setSubscriptionState('none');
+    }
+    markAsFailed(message) {
+        this.rejectedWithError = message.error;
+        this.updatePending(null, null);
+        this.localObject.reportFailure(new syncerror_1.SyncError(`Failed to subscribe on service events: ${message.error.message}`, message.error.status, message.error.code));
+    }
+    complete(eventId) {
+        this.updatePending(null, null);
+        this.established = true;
+        this.localObject._advanceLastEventId(eventId);
+    }
+    setSubscriptionState(newState) {
+        this.localObject._setSubscriptionState(newState);
+    }
+}
+/**
+ * @class Subscriptions
+ * @classdesc A manager which, in batches of varying size, continuously persists the
+ *      subscription intent of the caller to the Sync backend until it achieves a
+ *      converged state.
+ */
+class Subscriptions {
+    /**
+     * @constructor
+     * Prepares a new Subscriptions manager object with zero subscribed or persisted subscriptions.
+     *
+     * @param {object} config may include a key 'backoffConfig', wherein any of the parameters
+     *      of Backoff.exponential (from npm 'backoff') are valid and will override the defaults.
+     *
+     * @param {Network} must be a viable running Sync Network object, useful for routing requests.
+     */
+    constructor(services) {
+        this.isConnected = false;
+        this.maxBatchSize = 100;
+        // If the server includes a `ttl_in_s` attribute in the poke response, subscriptionTtlTimer is started for that duration
+        // such that when it fires, it repokes the entire sync set (i.e., emulates a reconnect). Every reconnect resets the timer.
+        // After the timer has fired, the first poke request includes a `reason: ttl` attribute in the body.
+        this.subscriptionTtlTimer = null;
+        this.pendingPokeReason = null;
+        this.services = services;
+        this.subscriptions = new Map();
+        this.persisted = new Map();
+        this.latestPokeResponseArrivalTimestampByCorrelationId = new Map();
+        const defaultBackoffConfig = {
+            randomisationFactor: 0.2,
+            initialDelay: 100,
+            maxDelay: 2 * 60 * 1000
+        };
+        this.backoff = operation_retrier_1.Backoff.exponential(Object.assign(defaultBackoffConfig, this.services.config.backoffConfig));
+        // This block is triggered by #_persist. Every request is executed in a series of (ideally 1)
+        // backoff 'ready' event, at which point a new subscription set is calculated.
+        this.backoff.on('ready', () => {
+            let { action: action, subscriptions: subscriptionRequests } = this.getSubscriptionUpdateBatch();
+            if (action) {
+                this.applyNewSubscriptionUpdateBatch(action, subscriptionRequests);
+            }
+            else {
+                this.backoff.reset();
+                logger_1.default.debug('All subscriptions resolved.');
+            }
+        });
+    }
+    getSubscriptionUpdateBatch() {
+        function subtract(these, those, action, limit) {
+            let result = [];
+            for (let [thisKey, thisValue] of these) {
+                const otherValue = those.get(thisKey);
+                if (!otherValue && action !== thisValue.pendingAction && !thisValue.rejectedWithError) {
+                    result.push(thisValue);
+                    if (limit && result.length >= limit) {
+                        break;
+                    }
+                }
+            }
+            return result;
+        }
+        let listToAdd = subtract(this.subscriptions, this.persisted, 'establish', this.maxBatchSize);
+        if (listToAdd.length > 0) {
+            return { action: 'establish', subscriptions: listToAdd };
+        }
+        let listToRemove = subtract(this.persisted, this.subscriptions, 'cancel', this.maxBatchSize);
+        if (listToRemove.length > 0) {
+            return { action: 'cancel', subscriptions: listToRemove };
+        }
+        return { action: null, subscriptions: null };
+    }
+    persist() {
+        this.backoff.backoff();
+    }
+    async applyNewSubscriptionUpdateBatch(action, requests) {
+        if (!this.isConnected) {
+            logger_1.default.debug(`Twilsock connection (required for subscription) not ready; waiting…`);
+            this.backoff.reset();
+            return;
+        }
+        // Keeping in mind that events may begin flowing _before_ we receive the response
+        requests = this.processLocalActions(action, requests);
+        const correlationId = new Date().getTime();
+        for (const subscribed of requests) {
+            this.recordActionAttemptOn(subscribed, action, correlationId);
+        }
+        let reason = this.pendingPokeReason;
+        this.pendingPokeReason = null;
+        // Send this batch to the service
+        try {
+            let response = await this.request(action, correlationId, reason, requests);
+            let newMaxBatchSize = response.body.max_batch_size;
+            if (!isNaN(parseInt(newMaxBatchSize)) && isFinite(newMaxBatchSize) && newMaxBatchSize > 0) {
+                this.maxBatchSize = newMaxBatchSize;
+            }
+            if (!this.subscriptionTtlTimer) {
+                let subscriptionTtlInS = response.body.ttl_in_s;
+                let isNumeric = !isNaN(parseFloat(subscriptionTtlInS)) && isFinite(subscriptionTtlInS);
+                let isValidTtl = isNumeric && subscriptionTtlInS > 0;
+                if (isValidTtl) {
+                    this.subscriptionTtlTimer = setTimeout(() => this.onSubscriptionTtlElapsed(), subscriptionTtlInS * 1000);
+                }
+            }
+            if (action === 'establish') {
+                const estimatedDeliveryInMs = response.body.estimated_delivery_in_ms;
+                let isNumeric = !isNaN(parseFloat(estimatedDeliveryInMs)) && isFinite(estimatedDeliveryInMs);
+                let isValidTimeout = isNumeric && estimatedDeliveryInMs > 0;
+                if (isValidTimeout) {
+                    setTimeout(() => this.verifyPokeDelivery(correlationId, estimatedDeliveryInMs, requests), estimatedDeliveryInMs);
+                }
+                else {
+                    logger_1.default.error(`Invalid timeout: ${estimatedDeliveryInMs}`);
+                }
+                requests.filter(r => r.pendingCorrelationId === correlationId)
+                    .forEach(r => r.setSubscriptionState('response_in_flight'));
+            }
+            this.backoff.reset();
+        }
+        catch (e) {
+            for (const attemptedSubscription of requests) {
+                this.recordActionFailureOn(attemptedSubscription, action);
+            }
+            if (e instanceof twilsock_1.TransportUnavailableError) {
+                logger_1.default.debug(`Twilsock connection (required for subscription) not ready (c:${correlationId}); waiting…`);
+                this.backoff.reset();
+            }
+            else {
+                logger_1.default.debug(`Failed an attempt to ${action} subscriptions (c:${correlationId}); retrying`, e);
+                this.persist();
+            }
+        }
+    }
+    verifyPokeDelivery(correlationId, estimatedDeliveryInMs, requests) {
+        const lastReceived = this.latestPokeResponseArrivalTimestampByCorrelationId.get(correlationId);
+        const silencePeriod = lastReceived ? (new Date().getTime() - lastReceived)
+            : estimatedDeliveryInMs;
+        if (silencePeriod >= estimatedDeliveryInMs) {
+            // If we haven't received _any_ responses from that poke request for the duration of estimated_delivery_in_ms, poke again
+            requests
+                .filter(r => r.pendingCorrelationId === correlationId)
+                .forEach(r => {
+                r.updatePending(null, null);
+                r.retryCount++;
+                this.persisted.delete(r.sid);
+            });
+            this.persist();
+            this.latestPokeResponseArrivalTimestampByCorrelationId.delete(correlationId);
+        }
+        else {
+            // Otherwise, the poke responses are probably in transit and we should wait for them
+            const timeoutExtension = estimatedDeliveryInMs - silencePeriod;
+            setTimeout(() => this.verifyPokeDelivery(correlationId, estimatedDeliveryInMs, requests), timeoutExtension);
+        }
+    }
+    processLocalActions(action, requests) {
+        if (action === 'cancel') {
+            return requests.filter(request => !request.rejectedWithError);
+        }
+        return requests;
+    }
+    recordActionAttemptOn(attemptedSubscription, action, correlationId) {
+        attemptedSubscription.setSubscriptionState('request_in_flight');
+        if (action === 'establish') {
+            this.persisted.set(attemptedSubscription.sid, attemptedSubscription);
+            attemptedSubscription.updatePending(action, correlationId);
+        }
+        else { // cancel
+            let persistedSubscription = this.persisted.get(attemptedSubscription.sid);
+            if (persistedSubscription) {
+                persistedSubscription.updatePending(action, correlationId);
+            }
+        }
+    }
+    recordActionFailureOn(attemptedSubscription, action) {
+        attemptedSubscription.setSubscriptionState('none');
+        attemptedSubscription.updatePending(null, null);
+        if (action === 'establish') {
+            this.persisted.delete(attemptedSubscription.sid);
+        }
+    }
+    request(action, correlationId, reason, objects) {
+        let requests = objects.map(object => ({
+            object_sid: object.sid,
+            object_type: object.type,
+            last_event_id: action === 'establish' ? object.lastEventId : undefined,
+            index_name: action === 'establish' ? object.indexName : undefined,
+            query_string: action === 'establish' ? object.queryString : undefined,
+        }));
+        let retriedRequests = objects.filter(a => a.retryCount > 0).length;
+        logger_1.default.debug(`Attempting '${action}' request (c:${correlationId}):`, requests);
+        const requestBody = {
+            event_protocol_version: 3,
+            action,
+            correlation_id: correlationId,
+            retried_requests: retriedRequests,
+            ttl_in_s: -1,
+            requests
+        };
+        if (reason === 'ttl') {
+            requestBody.reason = reason;
+        }
+        return this.services.network.post(this.services.config.subscriptionsUri, requestBody);
+    }
+    /**
+     * Establishes intent to be subscribed to this entity. That subscription will be effected
+     * asynchronously.
+     * If subscription to the given sid already exists, it will be overwritten.
+     *
+     * @param {String} sid should be a well-formed SID, uniquely identifying a single instance of a Sync entity.
+     * @param {Object} entity should represent the (singular) local representation of this entity.
+     *      Incoming events and modifications to the entity will be directed at the _update() function
+     *      of this provided reference.
+     *
+     * @return undefined
+     */
+    add(sid, entity) {
+        logger_1.default.debug(`Establishing intent to subscribe to ${sid}`);
+        const existingSubscription = this.subscriptions.get(sid);
+        if (existingSubscription && entity && existingSubscription.lastEventId === entity.lastEventId) {
+            // If last event id is the same as before - we're fine
+            return;
+        }
+        this.persisted.delete(sid);
+        this.subscriptions.set(sid, new SubscribedEntity(entity));
+        this.persist();
+    }
+    /**
+     * Establishes the caller's intent to no longer be subscribed to this entity. Following this
+     * call, no further events shall be routed to the local representation of the entity, even
+     * though a server-side subscription may take more time to actually terminate.
+     *
+     * @param {string} sid should be any well-formed SID, uniquely identifying a Sync entity.
+     *      This call only has meaningful effect if that entity is subscribed at the
+     *      time of call. Otherwise does nothing.
+     *
+     * @return undefined
+     */
+    remove(sid) {
+        logger_1.default.debug(`Establishing intent to unsubscribe from ${sid}`);
+        const removed = this.subscriptions.delete(sid);
+        if (removed) {
+            this.persist();
+        }
+    }
+    /**
+     * The point of ingestion for remote incoming messages (e.g. new data was written to a map
+     * to which we are subscribed).
+     *
+     * @param {object} message is the full, unaltered body of the incoming notification.
+     *
+     * @return undefined
+     */
+    acceptMessage(message, isStrictlyOrdered) {
+        logger_1.default.trace('Subscriptions received', message);
+        if (message.correlation_id) {
+            this.latestPokeResponseArrivalTimestampByCorrelationId.set(message.correlation_id, new Date().getTime());
+        }
+        let event_type;
+        switch (message.event_type) {
+            case 'subscription_established':
+                this.applySubscriptionEstablishedMessage(message.event, message.correlation_id);
+                break;
+            case 'subscription_canceled':
+                this.applySubscriptionCancelledMessage(message.event, message.correlation_id);
+                break;
+            case 'subscription_failed':
+                this.applySubscriptionFailedMessage(message.event, message.correlation_id);
+                break;
+            case (event_type = message.event_type.match(/^(?:map|list|document|stream|live_query)_/) || {}).input:
+                {
+                    let typedSid;
+                    switch (event_type[0]) {
+                        case 'map_':
+                            typedSid = message.event.map_sid;
+                            break;
+                        case 'list_':
+                            typedSid = message.event.list_sid;
+                            break;
+                        case 'document_':
+                            typedSid = message.event.document_sid;
+                            break;
+                        case 'stream_':
+                            typedSid = message.event.stream_sid;
+                            break;
+                        case 'live_query_':
+                            typedSid = message.event.query_id;
+                            // hack to mark replay events for LiveQuery as strictly ordered, due to lack of special type of notification for them
+                            // (normally only replay events would have `twilio.sync.event` type, but LiveQuery non-replay events were also assigned
+                            // to this type in legacy clients, which we have to support now; hence a hack)
+                            isStrictlyOrdered = false; // explicitly override it due to code in router.ts does not know about LiveQueries
+                            if (message.strictly_ordered === true) {
+                                isStrictlyOrdered = true;
+                            }
+                            break;
+                        default:
+                            typedSid = undefined;
+                    }
+                    this.applyEventToSubscribedEntity(typedSid, message, isStrictlyOrdered);
+                }
+                break;
+            default:
+                logger_1.default.debug(`Dropping unknown message type ${message.event_type}`);
+                break;
+        }
+    }
+    applySubscriptionEstablishedMessage(message, correlationId) {
+        const sid = message.object_sid;
+        let subscriptionIntent = this.persisted.get(message.object_sid);
+        if (subscriptionIntent && subscriptionIntent.pendingCorrelationId === correlationId) {
+            if (message.replay_status === 'interrupted') {
+                logger_1.default.debug(`Event Replay for subscription to ${sid} (c:${correlationId}) interrupted; continuing eagerly.`);
+                subscriptionIntent.updatePending(null, null);
+                this.persisted.delete(subscriptionIntent.sid);
+                this.backoff.reset();
+            }
+            else if (message.replay_status === 'completed') {
+                logger_1.default.debug(`Event Replay for subscription to ${sid} (c:${correlationId}) completed. Subscription is ready.`);
+                subscriptionIntent.complete(message.last_event_id);
+                this.persisted.set(message.object_sid, subscriptionIntent);
+                subscriptionIntent.setSubscriptionState('established');
+                this.backoff.reset();
+            }
+        }
+        else {
+            logger_1.default.debug(`Late message for ${message.object_sid} (c:${correlationId}) dropped.`);
+        }
+        this.persist();
+    }
+    applySubscriptionCancelledMessage(message, correlationId) {
+        let persistedSubscription = this.persisted.get(message.object_sid);
+        if (persistedSubscription && persistedSubscription.pendingCorrelationId === correlationId) {
+            persistedSubscription.updatePending(null, null);
+            persistedSubscription.setSubscriptionState('none');
+            this.persisted.delete(message.object_sid);
+        }
+        else {
+            logger_1.default.debug(`Late message for ${message.object_sid} (c:${correlationId}) dropped.`);
+        }
+        this.persist();
+    }
+    applySubscriptionFailedMessage(message, correlationId) {
+        const sid = message.object_sid;
+        let subscriptionIntent = this.subscriptions.get(sid);
+        let subscription = this.persisted.get(sid);
+        if (subscriptionIntent && subscription) {
+            if (subscription.pendingCorrelationId === correlationId) {
+                logger_1.default.error(`Failed to subscribe on ${subscription.sid}`, message.error);
+                subscription.markAsFailed(message);
+                subscription.setSubscriptionState('none');
+            }
+        }
+        else if (!subscriptionIntent && subscription) {
+            this.persisted.delete(sid);
+            subscription.setSubscriptionState('none');
+        }
+        this.persist();
+    }
+    applyEventToSubscribedEntity(sid, message, isStrictlyOrdered) {
+        if (!sid) {
+            return;
+        }
+        // Looking for subscription descriptor to check if poke has been completed
+        isStrictlyOrdered = isStrictlyOrdered || (() => {
+            let subscription = this.persisted.get(sid);
+            return subscription && subscription.isEstablished;
+        })();
+        // Still searching for subscriptionIntents. User could remove subscription already
+        let subscriptionIntent = this.subscriptions.get(sid);
+        if (subscriptionIntent) {
+            message.event.type = message.event_type;
+            subscriptionIntent.update(message.event, isStrictlyOrdered);
+        }
+        else {
+            logger_1.default.debug(`Message dropped for SID '${sid}', for which there is no subscription.`);
+        }
+    }
+    onConnectionStateChanged(isConnected) {
+        this.isConnected = isConnected;
+        if (isConnected) {
+            this.poke('reconnect');
+        }
+    }
+    onSubscriptionTtlElapsed() {
+        if (this.isConnected) {
+            this.poke('ttl');
+        }
+    }
+    /**
+     * Prompts a playback of any missed changes made to any subscribed object. This method
+     * should be invoked whenever the connectivity layer has experienced cross-cutting
+     * delivery failures that would affect the entire local sync set. Any tangible result
+     * of this operation will result in calls to the _update() function of subscribed
+     * Sync entities.
+     */
+    poke(reason) {
+        logger_1.default.debug(`Triggering event replay for all subscriptions, reason=${reason}`);
+        this.pendingPokeReason = reason;
+        if (this.subscriptionTtlTimer) {
+            clearTimeout(this.subscriptionTtlTimer);
+            this.subscriptionTtlTimer = null;
+        }
+        let failedSubscriptions = [];
+        for (let it of this.persisted.values()) {
+            it.reset();
+            if (it.rejectedWithError) {
+                failedSubscriptions.push(it);
+            }
+        }
+        this.persisted.clear();
+        for (let it of failedSubscriptions) {
+            this.persisted.set(it.sid, it);
+        }
+        this.persist();
+    }
+    /**
+     * Stops all communication, clears any subscription intent, and returns.
+     */
+    shutdown() {
+        this.backoff.reset();
+        this.subscriptions.clear();
+    }
+}
+exports.Subscriptions = Subscriptions;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/syncdocument.js":
+/*!******************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/syncdocument.js ***!
+  \******************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const syncerror_1 = __webpack_require__(/*! ./utils/syncerror */ "./node_modules/twilio-sync/lib/utils/syncerror.js");
+const sanitize_1 = __webpack_require__(/*! ./utils/sanitize */ "./node_modules/twilio-sync/lib/utils/sanitize.js");
+const logger_1 = __webpack_require__(/*! ./utils/logger */ "./node_modules/twilio-sync/lib/utils/logger.js");
+const entity_1 = __webpack_require__(/*! ./entity */ "./node_modules/twilio-sync/lib/entity.js");
+const mergingqueue_1 = __webpack_require__(/*! ./mergingqueue */ "./node_modules/twilio-sync/lib/mergingqueue.js");
+const closeable_1 = __webpack_require__(/*! ./closeable */ "./node_modules/twilio-sync/lib/closeable.js");
+class SyncDocumentImpl extends entity_1.SyncEntity {
+    /**
+     * @private
+     */
+    constructor(services, descriptor, removalHandler) {
+        super(services, removalHandler);
+        this.isDeleted = false;
+        const updateRequestReducer = (acc, input) => (typeof input.ttl === 'number') ? { ttl: input.ttl }
+            : acc;
+        this.updateMergingQueue = new mergingqueue_1.MergingQueue(updateRequestReducer);
+        this.descriptor = descriptor;
+        this.descriptor.data = this.descriptor.data || {};
+        this.descriptor.date_updated = new Date(this.descriptor.date_updated);
+    }
+    // private props
+    get uri() {
+        return this.descriptor.url;
+    }
+    get revision() {
+        return this.descriptor.revision;
+    }
+    get lastEventId() {
+        return this.descriptor.last_event_id;
+    }
+    get dateExpires() {
+        return this.descriptor.date_expires;
+    }
+    static get type() {
+        return 'document';
+    }
+    get type() {
+        return 'document';
+    }
+    // below properties are specific to Insights only
+    get indexName() {
+        return undefined;
+    }
+    get queryString() {
+        return undefined;
+    }
+    // public props, documented along with class description
+    get sid() {
+        return this.descriptor.sid;
+    }
+    get value() {
+        return this.descriptor.data;
+    }
+    get dateUpdated() {
+        return this.descriptor.date_updated;
+    }
+    get uniqueName() {
+        return this.descriptor.unique_name || null;
+    }
+    /**
+     * Update data entity with new data
+     * @private
+     */
+    _update(update) {
+        update.date_created = new Date(update.date_created);
+        switch (update.type) {
+            case 'document_updated':
+                if (update.id > this.lastEventId) {
+                    this.descriptor.last_event_id = update.id;
+                    this.descriptor.revision = update.document_revision;
+                    this.descriptor.date_updated = update.date_created;
+                    this.descriptor.data = update.document_data;
+                    this.broadcastEventToListeners('updated', { value: update.document_data, isLocal: false });
+                    this.services.storage.update(this.type, this.sid, this.uniqueName, {
+                        last_event_id: update.id,
+                        revision: update.document_revision,
+                        date_updated: update.date_created,
+                        data: update.document_data
+                    });
+                }
+                else {
+                    logger_1.default.trace('Document update skipped, current:', this.lastEventId, ', remote:', update.id);
+                }
+                break;
+            case 'document_removed':
+                this.onRemoved(false);
+                break;
+        }
+    }
+    async set(value, metadataUpdates) {
+        const input = metadataUpdates || {};
+        sanitize_1.validateOptionalTtl(input.ttl);
+        return this.updateMergingQueue.squashAndAdd(input, input => this._setUnconditionally(value, input.ttl));
+    }
+    async mutate(mutator, metadataUpdates) {
+        const input = metadataUpdates || {};
+        sanitize_1.validateOptionalTtl(input.ttl);
+        return this.updateMergingQueue.add(input, input => this._setWithIfMatch(mutator, input.ttl));
+    }
+    async update(obj, metadataUpdates) {
+        return this.mutate(remote => Object.assign(remote, obj), metadataUpdates);
+    }
+    async setTtl(ttl) {
+        sanitize_1.validateMandatoryTtl(ttl);
+        const response = await this._postUpdateToServer({ ttl });
+        this.descriptor.date_expires = response.date_expires;
+    }
+    /**
+     * @private
+     */
+    async _setUnconditionally(value, ttl) {
+        let result = await this._postUpdateToServer({ data: value, revision: undefined, ttl });
+        this._handleSuccessfulUpdateResult(result);
+        return this.value;
+    }
+    /**
+     * @private
+     */
+    async _setWithIfMatch(mutatorFunction, ttl) {
+        let data = mutatorFunction(sanitize_1.deepClone(this.value));
+        if (data) {
+            let revision = this.revision;
+            try {
+                let result = await this._postUpdateToServer({ data, revision, ttl });
+                this._handleSuccessfulUpdateResult(result);
+                return this.value;
+            }
+            catch (error) {
+                if (error.status === 412) {
+                    await this._softSync();
+                    return this._setWithIfMatch(mutatorFunction);
+                }
+                else {
+                    throw error;
+                }
+            }
+        }
+        else {
+            return this.value;
+        }
+    }
+    /**
+     * @private
+     */
+    _handleSuccessfulUpdateResult(result) {
+        if (result.last_event_id > this.descriptor.last_event_id) {
+            // Ignore returned value if we already got a newer one
+            this.descriptor.revision = result.revision;
+            this.descriptor.data = result.data;
+            this.descriptor.last_event_id = result.last_event_id;
+            this.descriptor.date_expires = result.date_expires;
+            this.descriptor.date_updated = new Date(result.date_updated);
+            this.services.storage.update(this.type, this.sid, this.uniqueName, {
+                last_event_id: result.last_event_id,
+                revision: result.revision,
+                date_updated: result.date_updated,
+                data: result.data
+            });
+            this.broadcastEventToListeners('updated', { value: this.value, isLocal: true });
+        }
+    }
+    /**
+     * @private
+     */
+    async _postUpdateToServer(request) {
+        if (!this.isDeleted) {
+            const requestBody = {
+                data: request.data
+            };
+            if (typeof request.ttl === 'number') {
+                requestBody.ttl = request.ttl;
+            }
+            const ifMatch = request.revision;
+            try {
+                const response = await this.services.network.post(this.uri, requestBody, ifMatch);
+                return {
+                    revision: response.body.revision,
+                    data: request.data,
+                    last_event_id: response.body.last_event_id,
+                    date_updated: response.body.date_updated,
+                    date_expires: response.body.date_expires
+                };
+            }
+            catch (error) {
+                if (error.status === 404) {
+                    this.onRemoved(false);
+                }
+                throw error;
+            }
+        }
+        else {
+            return Promise.reject(new syncerror_1.SyncError('The Document has been removed', 404, 54100));
+        }
+    }
+    /**
+     * Get new data from server
+     * @private
+     */
+    async _softSync() {
+        return this.services.network.get(this.uri)
+            .then(response => {
+            const event = {
+                type: 'document_updated',
+                id: response.body.last_event_id,
+                document_revision: response.body.revision,
+                document_data: response.body.data,
+                date_created: response.body.date_updated
+            };
+            this._update(event);
+            return this;
+        })
+            .catch(err => {
+            if (err.status === 404) {
+                this.onRemoved(false);
+            }
+            else {
+                logger_1.default.error(`Can't get updates for ${this.sid}:`, err);
+            }
+        });
+    }
+    onRemoved(locally) {
+        if (this.isDeleted) {
+            return;
+        }
+        else {
+            this.isDeleted = true;
+            this._unsubscribe();
+            this.removalHandler(this.type, this.sid, this.uniqueName);
+            this.broadcastEventToListeners('removed', { isLocal: locally });
+        }
+    }
+    async removeDocument() {
+        if (!this.isDeleted) {
+            await this.services.network.delete(this.uri);
+            this.onRemoved(true);
+        }
+        else {
+            return Promise.reject(new syncerror_1.SyncError('The Document has been removed', 404, 54100));
+        }
+    }
+}
+exports.SyncDocumentImpl = SyncDocumentImpl;
+/**
+ * @class
+ * @alias Document
+ * @classdesc Represents a Sync Document, the contents of which is a single JSON object.
+ * Use the {@link Client#document} method to obtain a reference to a Sync Document.
+ * @property {String} sid The immutable identifier of this document, assigned by the system.
+ * @property {String} [uniqueName=null] An optional immutable identifier that may be assigned by the programmer
+ * to this document during creation. Globally unique among other Documents.
+ * @property {Date} dateUpdated Date when the Document was last updated.
+ * @property {Object} value The contents of this document.
+ *
+ * @fires Document#removed
+ * @fires Document#updated
+ */
+class SyncDocument extends closeable_1.default {
+    constructor(syncDocumentImpl) {
+        super();
+        this.syncDocumentImpl = syncDocumentImpl;
+        this.syncDocumentImpl.attach(this);
+    }
+    // private props
+    get uri() {
+        return this.syncDocumentImpl.uri;
+    }
+    get revision() {
+        return this.syncDocumentImpl.revision;
+    }
+    get lastEventId() {
+        return this.syncDocumentImpl.lastEventId;
+    }
+    get dateExpires() {
+        return this.syncDocumentImpl.dateExpires;
+    }
+    static get type() {
+        return SyncDocumentImpl.type;
+    }
+    get type() {
+        return SyncDocumentImpl.type;
+    }
+    // public props, documented along with class description
+    get sid() {
+        return this.syncDocumentImpl.sid;
+    }
+    get value() {
+        return this.syncDocumentImpl.value;
+    }
+    get dateUpdated() {
+        return this.syncDocumentImpl.dateUpdated;
+    }
+    get uniqueName() {
+        return this.syncDocumentImpl.uniqueName;
+    }
+    /**
+     * Assign new contents to this document. The current value will be overwritten.
+     * @param {Object} value The new contents to assign.
+     * @param {Document#Metadata} [metadataUpdates] New document metadata.
+     * @returns {Promise<Object>} A promise resolving to the new value of the document.
+     * @public
+     * @example
+     * // Say, the Document value is { name: 'John Smith', age: 34 }
+     * document.set({ name: 'Barbara Oaks' }, { ttl: 86400 })
+     *   .then(function(newValue) {
+     *     // Now the Document value is { name: 'Barbara Oaks' }
+     *     console.log('Document set() successful, new value:', newValue);
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Document set() failed', error);
+     *   });
+     */
+    async set(value, metadataUpdates) {
+        this.ensureNotClosed();
+        return this.syncDocumentImpl.set(value, metadataUpdates);
+    }
+    /**
+     * Schedules a modification to this document that will apply a mutation function.
+     * @param {Document~Mutator} mutator A function that outputs a new value based on the existing value.
+     * May be called multiple times, particularly if this Document is modified concurrently by remote code.
+     * If the mutation ultimately succeeds, the Document will have made the particular transition described
+     * by this function.
+     * @param {Document#Metadata} [metadataUpdates] New document metadata.
+     * @return {Promise<Object>} Resolves with the most recent Document state, whether the output of a
+     *    successful mutation or a state that prompted graceful cancellation (mutator returned <code>null</code>).
+     * @public
+     * @example
+     * var mutatorFunction = function(currentValue) {
+     *     currentValue.viewCount = (currentValue.viewCount || 0) + 1;
+     *     return currentValue;
+     * };
+     * document.mutate(mutatorFunction, { ttl: 86400 }))
+     *   .then(function(newValue) {
+     *     console.log('Document mutate() successful, new value:', newValue);
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Document mutate() failed', error);
+     *   });
+     */
+    async mutate(mutator, metadataUpdates) {
+        this.ensureNotClosed();
+        return this.syncDocumentImpl.mutate(mutator, metadataUpdates);
+    }
+    /**
+     * Modify a document by appending new fields (or by overwriting existing ones) with the values from the provided Object.
+     * This is equivalent to
+     * <pre>
+     * document.mutate(function(currentValue) {
+     *   return Object.assign(currentValue, obj));
+     * });
+     * </pre>
+     * @param {Object} obj Specifies the particular (top-level) attributes that will receive new values.
+     * @param {Document#Metadata} [metadataUpdates] New document metadata.
+     * @return {Promise<Object>} A promise resolving to the new value of the document.
+     * @public
+     * @example
+     * // Say, the Document value is { name: 'John Smith' }
+     * document.update({ age: 34 }, { ttl: 86400 })
+     *   .then(function(newValue) {
+     *     // Now the Document value is { name: 'John Smith', age: 34 }
+     *     console.log('Document update() successful, new value:', newValue);
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Document update() failed', error);
+     *   });
+     */
+    async update(obj, metadataUpdates) {
+        this.ensureNotClosed();
+        return this.syncDocumentImpl.update(obj, metadataUpdates);
+    }
+    /**
+     * Update the time-to-live of the document.
+     * @param {Number} ttl Specifies the time-to-live in seconds after which the document is subject to automatic deletion. The value 0 means infinity.
+     * @return {Promise<void>} A promise that resolves after the TTL update was successful.
+     * @public
+     * @example
+     * document.setTtl(3600)
+     *   .then(function() {
+     *     console.log('Document setTtl() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Document setTtl() failed', error);
+     *   });
+     */
+    async setTtl(ttl) {
+        this.ensureNotClosed();
+        return this.syncDocumentImpl.setTtl(ttl);
+    }
+    /**
+     * Delete a document.
+     * @return {Promise<void>} A promise which resolves if (and only if) the document is ultimately deleted.
+     * @public
+     * @example
+     * document.removeDocument()
+     *   .then(function() {
+     *     console.log('Document removeDocument() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Document removeDocument() failed', error);
+     *   });
+     */
+    async removeDocument() {
+        this.ensureNotClosed();
+        return this.syncDocumentImpl.removeDocument();
+    }
+    /**
+     * Conclude work with the document instance and remove all event listeners attached to it.
+     * Any subsequent operation on this object will be rejected with error.
+     * Other local copies of this document will continue operating and receiving events normally.
+     * @public
+     * @example
+     * document.close();
+     */
+    close() {
+        super.close();
+        this.syncDocumentImpl.detach(this.listenerUuid);
+    }
+}
+exports.SyncDocument = SyncDocument;
+exports.default = SyncDocument;
+/**
+ * Contains Document metadata.
+ * @typedef {Object} Document#Metadata
+ * @property {String} [ttl] Specifies the time-to-live in seconds after which the document is subject to automatic deletion.
+ * The value 0 means infinity.
+ */
+/**
+ * Applies a transformation to the document value.
+ * @callback Document~Mutator
+ * @param {Object} currentValue The current value of the document in the cloud.
+ * @return {Object} The desired new value for the document or <code>null</code> to gracefully cancel the mutation.
+ */
+/**
+ * Fired when the document is removed, whether the remover was local or remote.
+ * @event Document#removed
+ * @param {Object} args Arguments provided with the event.
+ * @param {Boolean} args.isLocal Equals 'true' if document was removed by local actor, 'false' otherwise.
+ * @example
+ * document.on('removed', function(args) {
+ *   console.log('Document ' + document.sid + ' was removed');
+ *   console.log('args.isLocal:', args.isLocal);
+ * });
+ */
+/**
+ * Fired when the document's contents have changed, whether the updater was local or remote.
+ * @event Document#updated
+ * @param {Object} args Arguments provided with the event.
+ * @param {Object} args.value A snapshot of the document's new contents.
+ * @param {Boolean} args.isLocal Equals 'true' if document was updated by local actor, 'false' otherwise.
+ * @example
+ * document.on('updated', function(args) {
+ *   console.log('Document ' + document.sid + ' was updated');
+ *   console.log('args.value: ', args.value);
+ *   console.log('args.isLocal: ', args.isLocal);
+ * });
+ */
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/synclist.js":
+/*!**************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/synclist.js ***!
+  \**************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const sanitize_1 = __webpack_require__(/*! ./utils/sanitize */ "./node_modules/twilio-sync/lib/utils/sanitize.js");
+const uri_1 = __webpack_require__(/*! ./utils/uri */ "./node_modules/twilio-sync/lib/utils/uri.js");
+const syncerror_1 = __webpack_require__(/*! ./utils/syncerror */ "./node_modules/twilio-sync/lib/utils/syncerror.js");
+const logger_1 = __webpack_require__(/*! ./utils/logger */ "./node_modules/twilio-sync/lib/utils/logger.js");
+const entity_1 = __webpack_require__(/*! ./entity */ "./node_modules/twilio-sync/lib/entity.js");
+const listitem_1 = __webpack_require__(/*! ./listitem */ "./node_modules/twilio-sync/lib/listitem.js");
+const paginator_1 = __webpack_require__(/*! ./paginator */ "./node_modules/twilio-sync/lib/paginator.js");
+const cache_1 = __webpack_require__(/*! ./cache */ "./node_modules/twilio-sync/lib/cache.js");
+const mergingqueue_1 = __webpack_require__(/*! ./mergingqueue */ "./node_modules/twilio-sync/lib/mergingqueue.js");
+const closeable_1 = __webpack_require__(/*! ./closeable */ "./node_modules/twilio-sync/lib/closeable.js");
+class SyncListImpl extends entity_1.SyncEntity {
+    /**
+     * @private
+     */
+    constructor(services, descriptor, removalHandler) {
+        super(services, removalHandler);
+        const updateRequestReducer = (acc, input) => (typeof input.ttl === 'number') ? { ttl: input.ttl }
+            : acc;
+        this.updateMergingQueue = new mergingqueue_1.NamespacedMergingQueue(updateRequestReducer);
+        this.cache = new cache_1.Cache();
+        this.descriptor = descriptor;
+        this.descriptor.date_updated = new Date(this.descriptor.date_updated);
+    }
+    // private props
+    get uri() {
+        return this.descriptor.url;
+    }
+    get revision() {
+        return this.descriptor.revision;
+    }
+    get lastEventId() {
+        return this.descriptor.last_event_id;
+    }
+    get links() {
+        return this.descriptor.links;
+    }
+    get dateExpires() {
+        return this.descriptor.date_expires;
+    }
+    static get type() {
+        return 'list';
+    }
+    get type() {
+        return 'list';
+    }
+    // below properties are specific to Insights only
+    get indexName() {
+        return undefined;
+    }
+    get queryString() {
+        return undefined;
+    }
+    // public props, documented along with class description
+    get sid() {
+        return this.descriptor.sid;
+    }
+    get uniqueName() {
+        return this.descriptor.unique_name || null;
+    }
+    get dateUpdated() {
+        return this.descriptor.date_updated;
+    }
+    async _addOrUpdateItemOnServer(url, data, ifMatch, ttl) {
+        let requestBody = { data };
+        if (typeof ttl === 'number') {
+            requestBody.ttl = ttl;
+        }
+        let response = await this.services.network.post(url, requestBody, ifMatch);
+        response.body.data = data;
+        response.body.date_updated = new Date(response.body.date_updated);
+        return response.body;
+    }
+    async push(value, itemMetadata) {
+        let ttl = (itemMetadata || {}).ttl;
+        sanitize_1.validateOptionalTtl(ttl);
+        let item = await this._addOrUpdateItemOnServer(this.links.items, value, undefined, ttl);
+        let index = Number(item.index);
+        this._handleItemMutated(index, item.url, item.last_event_id, item.revision, value, item.date_updated, item.date_expires, true, false);
+        return this.cache.get(index);
+    }
+    async set(index, value, itemMetadataUpdates) {
+        const input = itemMetadataUpdates || {};
+        sanitize_1.validateOptionalTtl(input.ttl);
+        return this.updateMergingQueue.squashAndAdd(index, input, (input) => this._updateItemUnconditionally(index, value, input.ttl));
+    }
+    async _updateItemUnconditionally(index, data, ttl) {
+        let existingItem = await this.get(index);
+        const itemDescriptor = await this._addOrUpdateItemOnServer(existingItem.uri, data, undefined, ttl);
+        this._handleItemMutated(index, itemDescriptor.url, itemDescriptor.last_event_id, itemDescriptor.revision, itemDescriptor.data, itemDescriptor.date_updated, itemDescriptor.date_expires, false, false);
+        return this.cache.get(index);
+    }
+    async _updateItemWithIfMatch(index, mutatorFunction, ttl) {
+        const existingItem = await this.get(index);
+        const data = mutatorFunction(sanitize_1.deepClone(existingItem.value));
+        if (data) {
+            const ifMatch = existingItem.revision;
+            try {
+                const itemDescriptor = await this._addOrUpdateItemOnServer(existingItem.uri, data, ifMatch, ttl);
+                this._handleItemMutated(index, itemDescriptor.url, itemDescriptor.last_event_id, itemDescriptor.revision, itemDescriptor.data, itemDescriptor.date_updated, itemDescriptor.date_expires, false, false);
+                return this.cache.get(index);
+            }
+            catch (error) {
+                if (error.status === 412) {
+                    await this._getItemFromServer(index);
+                    return this._updateItemWithIfMatch(index, mutatorFunction, ttl);
+                }
+                else {
+                    throw error;
+                }
+            }
+        }
+        else {
+            return existingItem;
+        }
+    }
+    async mutate(index, mutator, itemMetadataUpdates) {
+        const input = itemMetadataUpdates || {};
+        sanitize_1.validateOptionalTtl(input.ttl);
+        return this.updateMergingQueue.add(index, input, (input) => this._updateItemWithIfMatch(index, mutator, input.ttl));
+    }
+    async update(index, obj, itemMetadataUpdates) {
+        return this.mutate(index, remote => Object.assign(remote, obj), itemMetadataUpdates);
+    }
+    async remove(index) {
+        let item = await this.get(index);
+        let response = await this.services.network.delete(item.uri);
+        this._handleItemRemoved(index, response.body.last_event_id, undefined, new Date(response.body.date_updated), false);
+    }
+    async get(index) {
+        let cachedItem = this.cache.get(index);
+        if (cachedItem) {
+            return cachedItem;
+        }
+        else {
+            return this._getItemFromServer(index);
+        }
+    }
+    async _getItemFromServer(index) {
+        let result = await this.queryItems({ index });
+        if (result.items.length < 1) {
+            throw new syncerror_1.SyncError(`No item with index ${index} found`, 404, 54151);
+        }
+        else {
+            return result.items[0];
+        }
+    }
+    /**
+     * Query items from the List
+     * @private
+     */
+    async queryItems(arg) {
+        arg = arg || {};
+        const url = new uri_1.UriBuilder(this.links.items)
+            .queryParam('From', arg.from)
+            .queryParam('PageSize', arg.limit)
+            .queryParam('Index', arg.index)
+            .queryParam('PageToken', arg.pageToken)
+            .queryParam('Order', arg.order)
+            .build();
+        let response = await this.services.network.get(url);
+        let items = response.body.items.map(el => {
+            el.date_updated = new Date(el.date_updated);
+            let itemInCache = this.cache.get(el.index);
+            if (itemInCache) {
+                this._handleItemMutated(el.index, el.url, el.last_event_id, el.revision, el.data, el.date_updated, el.date_expires, false, true);
+            }
+            else {
+                this.cache.store(Number(el.index), new listitem_1.ListItem({
+                    index: Number(el.index),
+                    uri: el.url,
+                    revision: el.revision,
+                    lastEventId: el.last_event_id,
+                    dateUpdated: el.date_updated,
+                    dateExpires: el.date_expires,
+                    value: el.data
+                }), el.last_event_id);
+            }
+            return this.cache.get(el.index);
+        });
+        let meta = response.body.meta;
+        return new paginator_1.Paginator(items, pageToken => this.queryItems({ pageToken }), meta.previous_token, meta.next_token);
+    }
+    async getItems(args) {
+        args = args || {};
+        sanitize_1.validatePageSize(args.pageSize);
+        args.limit = args.pageSize || args.limit || 50;
+        args.order = args.order || 'asc';
+        return this.queryItems(args);
+    }
+    /**
+     * @return {Promise<Object>} Context of List
+     * @private
+     */
+    async getContext() {
+        if (!this.context) {
+            let response = await this.services.network.get(this.links.context);
+            // store fetched context if we have't received any newer update
+            this._updateContextIfRequired(response.body.data, response.body.last_event_id);
+        }
+        return this.context;
+    }
+    async setTtl(ttl) {
+        sanitize_1.validateMandatoryTtl(ttl);
+        try {
+            const requestBody = { ttl };
+            const response = await this.services.network.post(this.uri, requestBody);
+            this.descriptor.date_expires = response.body.date_expires;
+        }
+        catch (error) {
+            if (error.status === 404) {
+                this.onRemoved(false);
+            }
+            throw error;
+        }
+    }
+    async setItemTtl(index, ttl) {
+        sanitize_1.validateMandatoryTtl(ttl);
+        let existingItem = await this.get(index);
+        const requestBody = { ttl };
+        const response = await this.services.network.post(existingItem.uri, requestBody);
+        existingItem.updateDateExpires(response.body.date_expires);
+    }
+    async removeList() {
+        await this.services.network.delete(this.uri);
+        this.onRemoved(true);
+    }
+    onRemoved(locally) {
+        this._unsubscribe();
+        this.removalHandler(this.type, this.sid, this.uniqueName);
+        this.broadcastEventToListeners('removed', { isLocal: locally });
+    }
+    shouldIgnoreEvent(key, eventId) {
+        return this.cache.isKnown(key, eventId);
+    }
+    /**
+     * Handle update, which came from the server.
+     * @private
+     */
+    _update(update, isStrictlyOrdered) {
+        const itemIndex = Number(update.item_index);
+        update.date_created = new Date(update.date_created);
+        switch (update.type) {
+            case 'list_item_added':
+            case 'list_item_updated':
+                {
+                    this._handleItemMutated(itemIndex, update.item_url, update.id, update.item_revision, update.item_data, update.date_created, undefined, // orchestration does not include date_expires
+                    update.type === 'list_item_added', true);
+                }
+                break;
+            case 'list_item_removed':
+                {
+                    this._handleItemRemoved(itemIndex, update.id, update.item_data, update.date_created, true);
+                }
+                break;
+            case 'list_context_updated':
+                {
+                    this._handleContextUpdate(update.context_data, update.id, update.date_created);
+                }
+                break;
+            case 'list_removed':
+                {
+                    this.onRemoved(false);
+                }
+                break;
+        }
+        if (isStrictlyOrdered) {
+            this._advanceLastEventId(update.id, update.list_revision);
+        }
+    }
+    _advanceLastEventId(eventId, revision) {
+        if (this.lastEventId < eventId) {
+            this.descriptor.last_event_id = eventId;
+            if (revision) {
+                this.descriptor.revision = revision;
+            }
+        }
+    }
+    _updateRootDateUpdated(dateUpdated) {
+        if (!this.descriptor.date_updated || dateUpdated.getTime() > this.descriptor.date_updated.getTime()) {
+            this.descriptor.date_updated = dateUpdated;
+            this.services.storage.update(this.type, this.sid, this.uniqueName, { date_updated: dateUpdated });
+        }
+    }
+    _handleItemMutated(index, uri, lastEventId, revision, value, dateUpdated, dateExpires, added, remote) {
+        if (this.shouldIgnoreEvent(index, lastEventId)) {
+            logger_1.default.trace('Item ', index, ' update skipped, current:', this.lastEventId, ', remote:', lastEventId);
+            return;
+        }
+        else {
+            this._updateRootDateUpdated(dateUpdated);
+            let item = this.cache.get(index);
+            if (!item) {
+                let item = new listitem_1.ListItem({ index, uri, lastEventId, revision, value, dateUpdated, dateExpires });
+                this.cache.store(index, item, lastEventId);
+                this.emitItemMutationEvent(item, remote, added);
+            }
+            else {
+                item.update(lastEventId, revision, value, dateUpdated);
+                this.cache.store(index, item, lastEventId);
+                if (dateExpires !== undefined) {
+                    item.updateDateExpires(dateExpires);
+                }
+                this.emitItemMutationEvent(item, remote, false);
+            }
+        }
+    }
+    /**
+     * @private
+     */
+    emitItemMutationEvent(item, remote, added) {
+        let eventName = added ? 'itemAdded' : 'itemUpdated';
+        this.broadcastEventToListeners(eventName, { item: item, isLocal: !remote });
+    }
+    /**
+     * @private
+     */
+    _handleItemRemoved(index, eventId, oldData, dateUpdated, remote) {
+        this._updateRootDateUpdated(dateUpdated);
+        this.cache.delete(index, eventId);
+        this.broadcastEventToListeners('itemRemoved', { index: index, isLocal: !remote, value: oldData });
+    }
+    /**
+     * @private
+     */
+    _handleContextUpdate(data, eventId, dateUpdated) {
+        this._updateRootDateUpdated(dateUpdated);
+        if (this._updateContextIfRequired(data, eventId)) {
+            this.broadcastEventToListeners('contextUpdated', { context: data, isLocal: false });
+        }
+    }
+    /**
+     * @private
+     */
+    _updateContextIfRequired(data, eventId) {
+        if (!this.contextEventId || eventId > this.contextEventId) {
+            this.context = data;
+            this.contextEventId = eventId;
+            return true;
+        }
+        else {
+            logger_1.default.trace('Context update skipped, current:', this.lastEventId, ', remote:', eventId);
+            return false;
+        }
+    }
+}
+exports.SyncListImpl = SyncListImpl;
+/**
+ * @class
+ * @alias List
+ * @classdesc Represents a Sync List, which stores an ordered list of values.
+ * Use the {@link Client#list} method to obtain a reference to a Sync List.
+ * @property {String} sid - List unique id, immutable identifier assigned by the system.
+ * @property {String} [uniqueName=null] - List unique name, immutable identifier that can be assigned to list during creation.
+ * @property {Date} dateUpdated Date when the List was last updated.
+ *
+ * @fires List#removed
+ * @fires List#itemAdded
+ * @fires List#itemRemoved
+ * @fires List#itemUpdated
+ */
+class SyncList extends closeable_1.default {
+    constructor(syncListImpl) {
+        super();
+        this.syncListImpl = syncListImpl;
+        this.syncListImpl.attach(this);
+    }
+    // private props
+    get uri() {
+        return this.syncListImpl.uri;
+    }
+    get revision() {
+        return this.syncListImpl.revision;
+    }
+    get lastEventId() {
+        return this.syncListImpl.lastEventId;
+    }
+    get links() {
+        return this.syncListImpl.links;
+    }
+    get dateExpires() {
+        return this.syncListImpl.dateExpires;
+    }
+    static get type() {
+        return SyncListImpl.type;
+    }
+    get type() {
+        return SyncListImpl.type;
+    }
+    // public props, documented along with class description
+    get sid() {
+        return this.syncListImpl.sid;
+    }
+    get uniqueName() {
+        return this.syncListImpl.uniqueName;
+    }
+    get dateUpdated() {
+        return this.syncListImpl.dateUpdated;
+    }
+    /**
+     * Add a new item to the list.
+     * @param {Object} value Value to be added.
+     * @param {List#ItemMetadata} [itemMetadata] Item metadata.
+     * @returns {Promise<ListItem>} A newly added item.
+     * @public
+     * @example
+     * list.push({ name: 'John Smith' }, { ttl: 86400 })
+     *   .then(function(item) {
+     *     console.log('List Item push() successful, item index:' + item.index + ', value: ', item.value)
+     *   })
+     *   .catch(function(error) {
+     *     console.error('List Item push() failed', error);
+     *   });
+     */
+    async push(value, itemMetadata) {
+        this.ensureNotClosed();
+        return this.syncListImpl.push(value, itemMetadata);
+    }
+    /**
+     * Assign new value to an existing item, given its index.
+     * @param {Number} index Index of the item to be updated.
+     * @param {Object} value New value to be assigned to an item.
+     * @param {List#ItemMetadata} [itemMetadataUpdates] New item metadata.
+     * @returns {Promise<ListItem>} A promise with updated item containing latest known value.
+     * The promise will be rejected if the item does not exist.
+     * @public
+     * @example
+     * list.set(42, { name: 'John Smith' }, { ttl: 86400 })
+     *   .then(function(item) {
+     *     console.log('List Item set() successful, item value:', item.value)
+     *   })
+     *   .catch(function(error) {
+     *     console.error('List Item set() failed', error);
+     *   });
+     */
+    async set(index, value, itemMetadataUpdates) {
+        this.ensureNotClosed();
+        return this.syncListImpl.set(index, value, itemMetadataUpdates);
+    }
+    /**
+     * Modify an existing item by applying a mutation function to it.
+     * @param {Number} index Index of an item to be changed.
+     * @param {List~Mutator} mutator A function that outputs a new value based on the existing value.
+     * @param {List#ItemMetadata} [itemMetadataUpdates] New item metadata.
+     * @returns {Promise<ListItem>} Resolves with the most recent item state, the output of a successful
+     *    mutation or a state that prompted graceful cancellation (mutator returned <code>null</code>). This promise
+     *    will be rejected if the indicated item does not already exist.
+     * @public
+     * @example
+     * var mutatorFunction = function(currentValue) {
+     *     currentValue.viewCount = (currentValue.viewCount || 0) + 1;
+     *     return currentValue;
+     * };
+     * list.mutate(42, mutatorFunction, { ttl: 86400 })
+     *   .then(function(item) {
+     *     console.log('List Item mutate() successful, new value:', item.value)
+     *   })
+     *   .catch(function(error) {
+     *     console.error('List Item mutate() failed', error);
+     *   });
+     */
+    async mutate(index, mutator, itemMetadataUpdates) {
+        this.ensureNotClosed();
+        return this.syncListImpl.mutate(index, mutator, itemMetadataUpdates);
+    }
+    /**
+     * Modify an existing item by appending new fields (or overwriting existing ones) with the values from Object.
+     * This is equivalent to
+     * <pre>
+     * list.mutate(42, function(currentValue) {
+     *   return Object.assign(currentValue, obj));
+     * });
+     * </pre>
+     * @param {Number} index Index of an item to be changed.
+     * @param {Object} obj Set of fields to update.
+     * @param {List#ItemMetadata} [itemMetadataUpdates] New item metadata.
+     * @returns {Promise<ListItem>} A promise with a modified item containing latest known value.
+     * The promise will be rejected if an item was not found.
+     * @public
+     * @example
+     * // Say, the List Item (index: 42) value is { name: 'John Smith' }
+     * list.update(42, { age: 34 }, { ttl: 86400 })
+     *   .then(function(item) {
+     *     // Now the List Item value is { name: 'John Smith', age: 34 }
+     *     console.log('List Item update() successful, new value:', item.value);
+     *   })
+     *   .catch(function(error) {
+     *     console.error('List Item update() failed', error);
+     *   });
+     */
+    async update(index, obj, itemMetadataUpdates) {
+        this.ensureNotClosed();
+        return this.syncListImpl.update(index, obj, itemMetadataUpdates);
+    }
+    /**
+     * Delete an item, given its index.
+     * @param {Number} index Index of an item to be removed.
+     * @returns {Promise<void>} A promise to remove an item.
+     * A promise will be rejected if an item was not found.
+     * @public
+     * @example
+     * list.remove(42)
+     *   .then(function() {
+     *     console.log('List Item remove() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('List Item remove() failed', error);
+     *   });
+     */
+    async remove(index) {
+        this.ensureNotClosed();
+        return this.syncListImpl.remove(index);
+    }
+    /**
+     * Retrieve an item by List index.
+     * @param {Number} index Item index in a List.
+     * @returns {Promise<ListItem>} A promise with an item containing latest known value.
+     * A promise will be rejected if an item was not found.
+     * @public
+     * @example
+     * list.get(42)
+     *   .then(function(item) {
+     *     console.log('List Item get() successful, item value:', item.value)
+     *   })
+     *   .catch(function(error) {
+     *     console.error('List Item get() failed', error);
+     *   });
+     */
+    async get(index) {
+        this.ensureNotClosed();
+        return this.syncListImpl.get(index);
+    }
+    /**
+     * Retrieve a List context
+     * @returns {Promise<Object>} A promise with a List's context
+     * @ignore
+     */
+    async getContext() {
+        this.ensureNotClosed();
+        return this.syncListImpl.getContext();
+    }
+    /**
+     * Query a list of items from collection.
+     * @param {Object} [args] Arguments for query
+     * @param {Number} [args.from] Item index, which should be used as the offset.
+     * If undefined, starts from the beginning or end depending on args.order.
+     * @param {Number} [args.pageSize=50] Results page size.
+     * @param {'asc'|'desc'} [args.order='asc'] Numeric order of results.
+     * @returns {Promise<Paginator<ListItem>>}
+     * @public
+     * @example
+     * var pageHandler = function(paginator) {
+     *   paginator.items.forEach(function(item) {
+     *     console.log('Item ' + item.index + ': ', item.value);
+     *   });
+     *   return paginator.hasNextPage ? paginator.nextPage().then(pageHandler)
+     *                                : null;
+     * };
+     * list.getItems({ from: 0, order: 'asc' })
+     *   .then(pageHandler)
+     *   .catch(function(error) {
+     *     console.error('List getItems() failed', error);
+     *   });
+     */
+    async getItems(args) {
+        this.ensureNotClosed();
+        return this.syncListImpl.getItems(args);
+    }
+    /**
+     * Update the time-to-live of the list.
+     * @param {Number} ttl Specifies the TTL in seconds after which the list is subject to automatic deletion. The value 0 means infinity.
+     * @return {Promise<void>} A promise that resolves after the TTL update was successful.
+     * @public
+     * @example
+     * list.setTtl(3600)
+     *   .then(function() {
+     *     console.log('List setTtl() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('List setTtl() failed', error);
+     *   });
+     */
+    async setTtl(ttl) {
+        this.ensureNotClosed();
+        return this.syncListImpl.setTtl(ttl);
+    }
+    /**
+     * Update the time-to-live of a list item.
+     * @param {Number} index Item index.
+     * @param {Number} ttl Specifies the TTL in seconds after which the list item is subject to automatic deletion. The value 0 means infinity.
+     * @return {Promise<void>} A promise that resolves after the TTL update was successful.
+     * @public
+     * @example
+     * list.setItemTtl(42, 86400)
+     *   .then(function() {
+     *     console.log('List setItemTtl() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('List setItemTtl() failed', error);
+     *   });
+     */
+    async setItemTtl(index, ttl) {
+        this.ensureNotClosed();
+        return this.syncListImpl.setItemTtl(index, ttl);
+    }
+    /**
+     * Delete this list. It will be impossible to restore it.
+     * @return {Promise<void>} A promise that resolves when the list has been deleted.
+     * @public
+     * @example
+     * list.removeList()
+     *   .then(function() {
+     *     console.log('List removeList() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('List removeList() failed', error);
+     *   });
+     */
+    async removeList() {
+        this.ensureNotClosed();
+        return this.syncListImpl.removeList();
+    }
+    /**
+     * Conclude work with the list instance and remove all event listeners attached to it.
+     * Any subsequent operation on this object will be rejected with error.
+     * Other local copies of this list will continue operating and receiving events normally.
+     * @public
+     * @example
+     * list.close();
+     */
+    close() {
+        super.close();
+        this.syncListImpl.detach(this.listenerUuid);
+    }
+}
+exports.SyncList = SyncList;
+exports.default = SyncList;
+/**
+ * Contains List Item metadata.
+ * @typedef {Object} List#ItemMetadata
+ * @property {String} [ttl] Specifies the time-to-live in seconds after which the list item is subject to automatic deletion.
+ * The value 0 means infinity.
+ */
+/**
+ * Applies a transformation to the item value. May be called multiple times on the
+ * same datum in case of collisions with remote code.
+ * @callback List~Mutator
+ * @param {Object} currentValue The current value of the item in the cloud.
+ * @return {Object} The desired new value for the item or <code>null</code> to gracefully cancel the mutation.
+ */
+/**
+ * Fired when a new item appears in the list, whether its creator was local or remote.
+ * @event List#itemAdded
+ * @param {Object} args Arguments provided with the event.
+ * @param {ListItem} args.item Added item.
+ * @param {Boolean} args.isLocal Equals 'true' if item was added by local actor, 'false' otherwise.
+ * @example
+ * list.on('itemAdded', function(args) {
+ *   console.log('List item ' + args.item.index + ' was added');
+ *   console.log('args.item.value:', args.item.value);
+ *   console.log('args.isLocal:', args.isLocal);
+ * });
+ */
+/**
+ * Fired when a list item is updated (not added or removed, but changed), whether the updater was local or remote.
+ * @event List#itemUpdated
+ * @param {Object} args Arguments provided with the event.
+ * @param {ListItem} args.item Updated item.
+ * @param {Boolean} args.isLocal Equals 'true' if item was updated by local actor, 'false' otherwise.
+ * @example
+ * list.on('itemUpdated', function(args) {
+ *   console.log('List item ' + args.item.index + ' was updated');
+ *   console.log('args.item.value:', args.item.value);
+ *   console.log('args.isLocal:', args.isLocal);
+ * });
+ */
+/**
+ * Fired when a list item is removed, whether the remover was local or remote.
+ * @event List#itemRemoved
+ * @param {Object} args Arguments provided with the event.
+ * @param {Number} args.index The index of the removed item.
+ * @param {Boolean} args.isLocal Equals 'true' if item was removed by local actor, 'false' otherwise.
+ * @param {Object} args.value In case item was removed by a remote actor, contains a snapshot of item data before removal.
+ * @example
+ * list.on('itemRemoved', function(args) {
+ *   console.log('List item ' + args.index + ' was removed');
+ *   console.log('args.value:', args.value);
+ *   console.log('args.isLocal:', args.isLocal);
+ * });
+ */
+/**
+ * Fired when a list is deleted entirely, by any actor local or remote.
+ * @event List#removed
+ * @param {Object} args Arguments provided with the event.
+ * @param {Boolean} args.isLocal Equals 'true' if list was removed by local actor, 'false' otherwise.
+ * @example
+ * list.on('removed', function(args) {
+ *   console.log('List ' + list.sid + ' was removed');
+ *   console.log('args.isLocal:', args.isLocal);
+ * });
+ */
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/syncmap.js":
+/*!*************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/syncmap.js ***!
+  \*************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const sanitize_1 = __webpack_require__(/*! ./utils/sanitize */ "./node_modules/twilio-sync/lib/utils/sanitize.js");
+const uri_1 = __webpack_require__(/*! ./utils/uri */ "./node_modules/twilio-sync/lib/utils/uri.js");
+const syncerror_1 = __webpack_require__(/*! ./utils/syncerror */ "./node_modules/twilio-sync/lib/utils/syncerror.js");
+const logger_1 = __webpack_require__(/*! ./utils/logger */ "./node_modules/twilio-sync/lib/utils/logger.js");
+const entity_1 = __webpack_require__(/*! ./entity */ "./node_modules/twilio-sync/lib/entity.js");
+const mapitem_1 = __webpack_require__(/*! ./mapitem */ "./node_modules/twilio-sync/lib/mapitem.js");
+const paginator_1 = __webpack_require__(/*! ./paginator */ "./node_modules/twilio-sync/lib/paginator.js");
+const cache_1 = __webpack_require__(/*! ./cache */ "./node_modules/twilio-sync/lib/cache.js");
+const mergingqueue_1 = __webpack_require__(/*! ./mergingqueue */ "./node_modules/twilio-sync/lib/mergingqueue.js");
+const closeable_1 = __webpack_require__(/*! ./closeable */ "./node_modules/twilio-sync/lib/closeable.js");
+class SyncMapImpl extends entity_1.SyncEntity {
+    /**
+     * @private
+     */
+    constructor(services, descriptor, removalHandler) {
+        super(services, removalHandler);
+        const updateRequestReducer = (acc, input) => (typeof input.ttl === 'number') ? { ttl: input.ttl }
+            : acc;
+        this.updateMergingQueue = new mergingqueue_1.NamespacedMergingQueue(updateRequestReducer);
+        this.cache = new cache_1.Cache();
+        this.descriptor = descriptor;
+        this.descriptor.date_updated = new Date(this.descriptor.date_updated);
+        if (descriptor.items) {
+            descriptor.items.forEach(itemDescriptor => {
+                itemDescriptor.date_updated = new Date(itemDescriptor.date_updated);
+                this.cache.store(itemDescriptor.key, new mapitem_1.MapItem(itemDescriptor), itemDescriptor.last_event_id);
+            });
+        }
+    }
+    // private props
+    get uri() {
+        return this.descriptor.url;
+    }
+    get links() {
+        return this.descriptor.links;
+    }
+    get revision() {
+        return this.descriptor.revision;
+    }
+    get lastEventId() {
+        return this.descriptor.last_event_id;
+    }
+    get dateExpires() {
+        return this.descriptor.date_expires;
+    }
+    static get type() {
+        return 'map';
+    }
+    get type() {
+        return 'map';
+    }
+    // below properties are specific to Insights only
+    get indexName() {
+        return undefined;
+    }
+    get queryString() {
+        return undefined;
+    }
+    // public props, documented along with class description
+    get sid() {
+        return this.descriptor.sid;
+    }
+    get uniqueName() {
+        return this.descriptor.unique_name || null;
+    }
+    get dateUpdated() {
+        return this.descriptor.date_updated;
+    }
+    async set(key, value, itemMetadataUpdates) {
+        const input = itemMetadataUpdates || {};
+        sanitize_1.validateOptionalTtl(input.ttl);
+        return this.updateMergingQueue.squashAndAdd(key, input, (input) => this._putItemUnconditionally(key, value, input.ttl));
+    }
+    async get(key) {
+        if (this.cache.has(key)) {
+            return this.cache.get(key);
+        }
+        else {
+            return this._getItemFromServer(key);
+        }
+    }
+    async _getItemFromServer(key) {
+        let result = await this.queryItems({ key: key });
+        if (result.items.length < 1) {
+            throw new syncerror_1.SyncError(`No item with key ${key} found`, 404, 54201);
+        }
+        else {
+            return result.items[0];
+        }
+    }
+    async mutate(key, mutator, itemMetadataUpdates) {
+        const input = itemMetadataUpdates || {};
+        sanitize_1.validateOptionalTtl(input.ttl);
+        return this.updateMergingQueue.add(key, input, (input) => this._putItemWithIfMatch(key, mutator, input.ttl));
+    }
+    async update(key, obj, itemMetadataUpdates) {
+        return this.mutate(key, remote => Object.assign(remote, obj), itemMetadataUpdates);
+    }
+    async _putItemUnconditionally(key, data, ttl) {
+        const result = await this._putItemToServer(key, data, undefined, ttl);
+        const item = result.item;
+        this._handleItemMutated(item.key, item.url, item.last_event_id, item.revision, item.data, item.date_updated, item.date_expires, result.added, false);
+        return this.cache.get(item.key);
+    }
+    async _putItemWithIfMatch(key, mutatorFunction, ttl) {
+        const currentItem = await this.get(key)
+            .catch(error => {
+            if (error.status === 404) {
+                // PUT /Items/myKey with `If-Match: -1` acts as "put if not exists"
+                return new mapitem_1.MapItem({ key: key, data: {}, last_event_id: -1, revision: '-1', url: null, date_updated: null, date_expires: null });
+            }
+            else {
+                throw error;
+            }
+        });
+        let data = mutatorFunction(sanitize_1.deepClone(currentItem.value));
+        if (data) {
+            let ifMatch = currentItem.revision;
+            try {
+                const result = await this._putItemToServer(key, data, ifMatch, ttl);
+                const item = result.item;
+                this._handleItemMutated(item.key, item.url, item.last_event_id, item.revision, item.data, item.date_updated, item.date_expires, result.added, false);
+                return this.cache.get(item.key);
+            }
+            catch (error) {
+                if (error.status === 412) {
+                    await this._getItemFromServer(key);
+                    return this._putItemWithIfMatch(key, mutatorFunction, ttl);
+                }
+                else {
+                    throw error;
+                }
+            }
+        }
+        else {
+            return currentItem;
+        }
+    }
+    async _putItemToServer(key, data, ifMatch, ttl) {
+        const url = new uri_1.UriBuilder(this.links.items).pathSegment(key).build();
+        const requestBody = { data };
+        if (typeof ttl === 'number') {
+            requestBody.ttl = ttl;
+        }
+        try {
+            const response = await this.services.network.put(url, requestBody, ifMatch);
+            const mapItemDescriptor = response.body;
+            mapItemDescriptor.data = data; // The server does not return the data in the response
+            mapItemDescriptor.date_updated = new Date(mapItemDescriptor.date_updated);
+            const added = response.status.code === 201;
+            return { added, item: mapItemDescriptor };
+        }
+        catch (error) {
+            if (error.status === 404) {
+                this.onRemoved(false);
+            }
+            throw error;
+        }
+    }
+    async remove(key) {
+        if (typeof key === 'undefined') {
+            throw new Error('Key argument is invalid');
+        }
+        let item = await this.get(key);
+        let response = await this.services.network.delete(item.uri);
+        this._handleItemRemoved(key, response.body.last_event_id, undefined, new Date(response.body.date_updated), false);
+    }
+    /**
+     * @private
+     */
+    async queryItems(args) {
+        args = args || {};
+        const uri = new uri_1.UriBuilder(this.links.items)
+            .queryParam('From', args.from)
+            .queryParam('PageSize', args.limit)
+            .queryParam('Key', args.key)
+            .queryParam('PageToken', args.pageToken)
+            .queryParam('Order', args.order)
+            .build();
+        let response = await this.services.network.get(uri);
+        let items = response.body.items.map(el => {
+            el.date_updated = new Date(el.date_updated);
+            let itemInCache = this.cache.get(el.key);
+            if (itemInCache) {
+                this._handleItemMutated(el.key, el.url, el.last_event_id, el.revision, el.data, el.date_updated, el.date_expires, false, true);
+            }
+            else {
+                this.cache.store(el.key, new mapitem_1.MapItem(el), el.last_event_id);
+            }
+            return this.cache.get(el.key);
+        });
+        const meta = response.body.meta;
+        return new paginator_1.Paginator(items, pageToken => this.queryItems({ pageToken }), meta.previous_token, meta.next_token);
+    }
+    async getItems(args) {
+        args = args || {};
+        sanitize_1.validatePageSize(args.pageSize);
+        args.limit = args.pageSize || args.limit || 50;
+        args.order = args.order || 'asc';
+        return this.queryItems(args);
+    }
+    shouldIgnoreEvent(key, eventId) {
+        return this.cache.isKnown(key, eventId);
+    }
+    /**
+     * Handle update from the server
+     * @private
+     */
+    _update(update, isStrictlyOrdered) {
+        update.date_created = new Date(update.date_created);
+        switch (update.type) {
+            case 'map_item_added':
+            case 'map_item_updated':
+                {
+                    this._handleItemMutated(update.item_key, update.item_url, update.id, update.item_revision, update.item_data, update.date_created, undefined, // orchestration events do not include date_expires
+                    update.type === 'map_item_added', true);
+                }
+                break;
+            case 'map_item_removed':
+                {
+                    this._handleItemRemoved(update.item_key, update.id, update.item_data, update.date_created, true);
+                }
+                break;
+            case 'map_removed':
+                {
+                    this.onRemoved(false);
+                }
+                break;
+        }
+        if (isStrictlyOrdered) {
+            this._advanceLastEventId(update.id, update.map_revision);
+        }
+    }
+    _advanceLastEventId(eventId, revision) {
+        if (this.lastEventId < eventId) {
+            this.descriptor.last_event_id = eventId;
+            if (revision) {
+                this.descriptor.revision = revision;
+            }
+        }
+    }
+    _updateRootDateUpdated(dateUpdated) {
+        if (!this.descriptor.date_updated || dateUpdated.getTime() > this.descriptor.date_updated.getTime()) {
+            this.descriptor.date_updated = dateUpdated;
+            this.services.storage.update(this.type, this.sid, this.uniqueName, { date_updated: dateUpdated });
+        }
+    }
+    _handleItemMutated(key, url, lastEventId, revision, value, dateUpdated, dateExpires, added, remote) {
+        if (this.shouldIgnoreEvent(key, lastEventId)) {
+            logger_1.default.trace('Item ', key, ' update skipped, current:', this.lastEventId, ', remote:', lastEventId);
+            return;
+        }
+        else {
+            this._updateRootDateUpdated(dateUpdated);
+            let item = this.cache.get(key);
+            if (!item) {
+                item = new mapitem_1.MapItem({ key: key, url, last_event_id: lastEventId, revision, data: value, date_updated: dateUpdated, date_expires: dateExpires });
+                this.cache.store(key, item, lastEventId);
+                this.emitItemMutationEvent(item, remote, added);
+            }
+            else {
+                item.update(lastEventId, revision, value, dateUpdated);
+                this.cache.store(key, item, lastEventId);
+                if (dateExpires !== undefined) {
+                    item.updateDateExpires(dateExpires);
+                }
+                this.emitItemMutationEvent(item, remote, false);
+            }
+        }
+    }
+    emitItemMutationEvent(item, remote, added) {
+        let eventName = added ? 'itemAdded' : 'itemUpdated';
+        this.broadcastEventToListeners(eventName, { item: item, isLocal: !remote });
+    }
+    /**
+     * @private
+     */
+    _handleItemRemoved(key, eventId, oldData, dateUpdated, remote) {
+        this._updateRootDateUpdated(dateUpdated);
+        this.cache.delete(key, eventId);
+        this.broadcastEventToListeners('itemRemoved', { key: key, isLocal: !remote, value: oldData });
+    }
+    onRemoved(locally) {
+        this._unsubscribe();
+        this.removalHandler(this.type, this.sid, this.uniqueName);
+        this.broadcastEventToListeners('removed', { isLocal: locally });
+    }
+    async setTtl(ttl) {
+        sanitize_1.validateMandatoryTtl(ttl);
+        try {
+            const requestBody = { ttl };
+            const response = await this.services.network.post(this.uri, requestBody);
+            this.descriptor.date_expires = response.body.date_expires;
+        }
+        catch (error) {
+            if (error.status === 404) {
+                this.onRemoved(false);
+            }
+            throw error;
+        }
+    }
+    async setItemTtl(key, ttl) {
+        sanitize_1.validateMandatoryTtl(ttl);
+        let existingItem = await this.get(key);
+        const requestBody = { ttl };
+        const response = await this.services.network.post(existingItem.uri, requestBody);
+        existingItem.updateDateExpires(response.body.date_expires);
+    }
+    async removeMap() {
+        await this.services.network.delete(this.uri);
+        this.onRemoved(true);
+    }
+}
+exports.SyncMapImpl = SyncMapImpl;
+/**
+ * @class
+ * @alias Map
+ * @classdesc Represents a Sync Map, which stores an unordered set of key:value pairs.
+ * Use the {@link Client#map} method to obtain a reference to a Sync Map.
+ * @property {String} sid An immutable identifier (a SID) assigned by the system on creation.
+ * @property {String} [uniqueName=null] - An optional immutable identifier that may be assigned by the
+ * programmer to this map on creation. Unique among other Maps.
+ * @property {Date} dateUpdated Date when the Map was last updated.
+ *
+ * @fires Map#removed
+ * @fires Map#itemAdded
+ * @fires Map#itemRemoved
+ * @fires Map#itemUpdated
+ */
+class SyncMap extends closeable_1.Closeable {
+    constructor(syncMapImpl) {
+        super();
+        this.syncMapImpl = syncMapImpl;
+        this.syncMapImpl.attach(this);
+    }
+    // private props
+    get uri() {
+        return this.syncMapImpl.uri;
+    }
+    get links() {
+        return this.syncMapImpl.links;
+    }
+    get revision() {
+        return this.syncMapImpl.revision;
+    }
+    get lastEventId() {
+        return this.syncMapImpl.lastEventId;
+    }
+    get dateExpires() {
+        return this.syncMapImpl.dateExpires;
+    }
+    static get type() {
+        return SyncMapImpl.type;
+    }
+    get type() {
+        return SyncMapImpl.type;
+    }
+    // public props, documented along with class description
+    get sid() {
+        return this.syncMapImpl.sid;
+    }
+    get uniqueName() {
+        return this.syncMapImpl.uniqueName;
+    }
+    get dateUpdated() {
+        return this.syncMapImpl.dateUpdated;
+    }
+    /**
+     * Add a new item to the map with the given key:value pair. Overwrites any value that might already exist at that key.
+     * @param {String} key Unique item identifier.
+     * @param {Object} value Value to be set.
+     * @param {Map#ItemMetadata} [itemMetadataUpdates] New item metadata.
+     * @returns {Promise<MapItem>} Newly added item, or modified one if already exists, with the latest known value.
+     * @public
+     * @example
+     * map.set('myKey', { name: 'John Smith' }, { ttl: 86400 })
+     *   .then(function(item) {
+     *     console.log('Map Item set() successful, item value:', item.value);
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Map Item set() failed', error);
+     *   });
+     */
+    async set(key, value, itemMetadataUpdates) {
+        this.ensureNotClosed();
+        return this.syncMapImpl.set(key, value, itemMetadataUpdates);
+    }
+    /**
+     * Retrieve an item by key.
+     * @param {String} key Identifies the desired item.
+     * @returns {Promise<MapItem>} A promise that resolves when the item has been fetched.
+     * This promise will be rejected if item was not found.
+     * @public
+     * @example
+     * map.get('myKey')
+     *   .then(function(item) {
+     *     console.log('Map Item get() successful, item value:', item.value)
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Map Item get() failed', error);
+     *   });
+     */
+    async get(key) {
+        this.ensureNotClosed();
+        return this.syncMapImpl.get(key);
+    }
+    /**
+     * Schedules a modification to this Map Item that will apply a mutation function.
+     * If no Item with the given key exists, it will first be created, having the default value (<code>{}</code>).
+     * @param {String} key Selects the map item to be mutated.
+     * @param {Map~Mutator} mutator A function that outputs a new value based on the existing value.
+     * May be called multiple times, particularly if this Map Item is modified concurrently by remote code.
+     * If the mutation ultimately succeeds, the Map Item will have made the particular transition described
+     * by this function.
+     * @param {Map#ItemMetadata} [itemMetadataUpdates] New item metadata.
+     * @returns {Promise<MapItem>} Resolves with the most recent item state, the output of a successful
+     * mutation or a state that prompted graceful cancellation (mutator returned <code>null</code>).
+     * @public
+     * @example
+     * var mutatorFunction = function(currentValue) {
+     *     currentValue.viewCount = (currentValue.viewCount || 0) + 1;
+     *     return currentValue;
+     * };
+     * map.mutate('myKey', mutatorFunction, { ttl: 86400 })
+     *   .then(function(item) {
+     *     console.log('Map Item mutate() successful, new value:', item.value)
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Map Item mutate() failed', error);
+     *   });
+     */
+    async mutate(key, mutator, itemMetadataUpdates) {
+        this.ensureNotClosed();
+        return this.syncMapImpl.mutate(key, mutator, itemMetadataUpdates);
+    }
+    /**
+     * Modify a map item by appending new fields (or by overwriting existing ones) with the values from
+     * the provided Object. Creates a new item if no item by this key exists, copying all given fields and values
+     * into it.
+     * This is equivalent to
+     * <pre>
+     * map.mutate('myKey', function(currentValue) {
+     *   return Object.assign(currentValue, obj));
+     * });
+     * </pre>
+     * @param {String} key Selects the map item to update.
+     * @param {Object} obj Specifies the particular (top-level) attributes that will receive new values.
+     * @param {Map#ItemMetadata} [itemMetadataUpdates] New item metadata.
+     * @returns {Promise<MapItem>} A promise resolving to the modified item in its new state.
+     * @public
+     * @example
+     * // Say, the Map Item (key: 'myKey') value is { name: 'John Smith' }
+     * map.update('myKey', { age: 34 }, { ttl: 86400 })
+     *   .then(function(item) {
+     *     // Now the Map Item value is { name: 'John Smith', age: 34 }
+     *     console.log('Map Item update() successful, new value:', item.value);
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Map Item update() failed', error);
+     *   });
+     */
+    async update(key, obj, itemMetadataUpdates) {
+        this.ensureNotClosed();
+        return this.syncMapImpl.update(key, obj, itemMetadataUpdates);
+    }
+    /**
+     * Delete an item, given its key.
+     * @param {String} key Selects the item to delete.
+     * @returns {Promise<void>} A promise to remove an item.
+     * The promise will be rejected if 'key' is undefined or an item was not found.
+     * @public
+     * @example
+     * map.remove('myKey')
+     *   .then(function() {
+     *     console.log('Map Item remove() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Map Item remove() failed', error);
+     *   });
+     */
+    async remove(key) {
+        this.ensureNotClosed();
+        return this.syncMapImpl.remove(key);
+    }
+    /**
+     * Get a complete list of items from the map.
+     * @param {Object} [args] Arguments for query.
+     * @param {String} [args.from] Item key, which should be used as the offset. If undefined, starts from the beginning or end depending on args.order.
+     * @param {Number} [args.pageSize=50] Result page size.
+     * @param {'asc'|'desc'} [args.order='asc'] Lexicographical order of results.
+     * @return {Promise<Paginator<MapItem>>}
+     * @public
+     * @example
+     * var pageHandler = function(paginator) {
+     *   paginator.items.forEach(function(item) {
+     *     console.log('Item ' + item.key + ': ', item.value);
+     *   });
+     *   return paginator.hasNextPage ? paginator.nextPage().then(pageHandler)
+     *                                : null;
+     * };
+     * map.getItems({ from: 'myKey', order: 'asc' })
+     *   .then(pageHandler)
+     *   .catch(function(error) {
+     *     console.error('Map getItems() failed', error);
+     *   });
+     */
+    async getItems(args) {
+        this.ensureNotClosed();
+        return this.syncMapImpl.getItems(args);
+    }
+    /**
+     * Update the time-to-live of the map.
+     * @param {Number} ttl Specifies the TTL in seconds after which the map is subject to automatic deletion. The value 0 means infinity.
+     * @return {Promise<void>} A promise that resolves after the TTL update was successful.
+     * @public
+     * @example
+     * map.setTtl(3600)
+     *   .then(function() {
+     *     console.log('Map setTtl() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Map setTtl() failed', error);
+     *   });
+     */
+    async setTtl(ttl) {
+        this.ensureNotClosed();
+        return this.syncMapImpl.setTtl(ttl);
+    }
+    /**
+     * Update the time-to-live of a map item.
+     * @param {Number} key Item key.
+     * @param {Number} ttl Specifies the TTL in seconds after which the map item is subject to automatic deletion. The value 0 means infinity.
+     * @return {Promise<void>} A promise that resolves after the TTL update was successful.
+     * @public
+     * @example
+     * map.setItemTtl('myKey', 86400)
+     *   .then(function() {
+     *     console.log('Map setItemTtl() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Map setItemTtl() failed', error);
+     *   });
+     */
+    async setItemTtl(key, ttl) {
+        this.ensureNotClosed();
+        return this.syncMapImpl.setItemTtl(key, ttl);
+    }
+    /**
+     * Delete this map. It will be impossible to restore it.
+     * @return {Promise<void>} A promise that resolves when the map has been deleted.
+     * @public
+     * @example
+     * map.removeMap()
+     *   .then(function() {
+     *     console.log('Map removeMap() successful');
+     *   })
+     *   .catch(function(error) {
+     *     console.error('Map removeMap() failed', error);
+     *   });
+     */
+    async removeMap() {
+        this.ensureNotClosed();
+        await this.syncMapImpl.removeMap();
+    }
+    /**
+     * Conclude work with the map instance and remove all event listeners attached to it.
+     * Any subsequent operation on this object will be rejected with error.
+     * Other local copies of this map will continue operating and receiving events normally.
+     * @public
+     * @example
+     * map.close();
+     */
+    close() {
+        super.close();
+        this.syncMapImpl.detach(this.listenerUuid);
+    }
+}
+exports.SyncMap = SyncMap;
+exports.default = SyncMap;
+/**
+ * Contains Map Item metadata.
+ * @typedef {Object} Map#ItemMetadata
+ * @property {String} [ttl] Specifies the time-to-live in seconds after which the map item is subject to automatic deletion.
+ * The value 0 means infinity.
+ */
+/**
+ * Applies a transformation to the item value. May be called multiple times on the
+ * same datum in case of collisions with remote code.
+ * @callback Map~Mutator
+ * @param {Object} currentValue The current value of the item in the cloud.
+ * @return {Object} The desired new value for the item or <code>null</code> to gracefully cancel the mutation.
+ */
+/**
+ * Fired when a new item appears in the map, whether its creator was local or remote.
+ * @event Map#itemAdded
+ * @param {Object} args Arguments provided with the event.
+ * @param {MapItem} args.item Added item.
+ * @param {Boolean} args.isLocal Equals 'true' if item was added by local actor, 'false' otherwise.
+ * @example
+ * map.on('itemAdded', function(args) {
+ *   console.log('Map item ' + args.item.key + ' was added');
+ *   console.log('args.item.value:', args.item.value);
+ *   console.log('args.isLocal:', args.isLocal);
+ * });
+ */
+/**
+ * Fired when a map item is updated (not added or removed, but changed), whether the updater was local or remote.
+ * @event Map#itemUpdated
+ * @param {Object} args Arguments provided with the event.
+ * @param {MapItem} args.item Updated item.
+ * @param {Boolean} args.isLocal Equals 'true' if item was updated by local actor, 'false' otherwise.
+ * @example
+ * map.on('itemUpdated', function(args) {
+ *   console.log('Map item ' + args.item.key + ' was updated');
+ *   console.log('args.item.value:', args.item.value);
+ *   console.log('args.isLocal:', args.isLocal);
+ * });
+ */
+/**
+ * Fired when a map item is removed, whether the remover was local or remote.
+ * @event Map#itemRemoved
+ * @param {Object} args Arguments provided with the event.
+ * @param {String} args.key The key of the removed item.
+ * @param {Boolean} args.isLocal Equals 'true' if item was removed by local actor, 'false' otherwise.
+ * @param {Object} args.value In case item was removed by a remote actor, contains a snapshot of item data before removal.
+ * @example
+ * map.on('itemRemoved', function(args) {
+ *   console.log('Map item ' + args.key + ' was removed');
+ *   console.log('args.value:', args.value);
+ *   console.log('args.isLocal:', args.isLocal);
+ * });
+ */
+/**
+ * Fired when a map is deleted entirely, by any actor local or remote.
+ * @event Map#removed
+ * @param {Object} args Arguments provided with the event.
+ * @param {Boolean} args.isLocal Equals 'true' if map was removed by local actor, 'false' otherwise.
+ * @example
+ * map.on('removed', function(args) {
+ *   console.log('Map ' + map.sid + ' was removed');
+ *   console.log('args.isLocal:', args.isLocal);
+ * });
+ */
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/utils/logger.js":
+/*!******************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/utils/logger.js ***!
+  \******************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const log = __webpack_require__(/*! loglevel */ "./node_modules/loglevel/lib/loglevel.js");
+function prepareLine(prefix, args) {
+    return [`${new Date().toISOString()} Sync ${prefix}:`].concat(Array.from(args));
+}
+exports.default = {
+    setLevel: function (level) {
+        log.setLevel(level);
+    },
+    trace: function (...args) {
+        log.trace.apply(null, prepareLine('T', args));
+    },
+    debug: function (...args) {
+        log.debug.apply(null, prepareLine('D', args));
+    },
+    info: function (...args) {
+        log.info.apply(null, prepareLine('I', args));
+    },
+    warn: function (...args) {
+        log.warn.apply(null, prepareLine('W', args));
+    },
+    error: function (...args) {
+        log.error.apply(null, prepareLine('E', args));
+    }
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/utils/sanitize.js":
+/*!********************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/utils/sanitize.js ***!
+  \********************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const syncerror_1 = __webpack_require__(/*! ./syncerror */ "./node_modules/twilio-sync/lib/utils/syncerror.js");
+/**
+ * Deep-clone an object. Note that this does not work on object containing
+ * functions.
+ * @param {object} obj - the object to deep-clone
+ * @returns {object}
+ */
+function deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+}
+exports.deepClone = deepClone;
+function validateOptionalTtl(ttl) {
+    const validTtl = ttl === undefined || isNonNegativeInteger(ttl);
+    if (!validTtl) {
+        throw new syncerror_1.default(`Invalid TTL value, expected a positive integer, was '${ttl}'`, 400, 54011);
+    }
+}
+exports.validateOptionalTtl = validateOptionalTtl;
+function validateMandatoryTtl(ttl) {
+    const validTtl = isNonNegativeInteger(ttl);
+    if (!validTtl) {
+        throw new syncerror_1.default(`Invalid TTL value, expected a positive integer, was '${ttl}'`, 400, 54011);
+    }
+}
+exports.validateMandatoryTtl = validateMandatoryTtl;
+function validatePageSize(pageSize) {
+    const validPageSize = pageSize === undefined || isPositiveInteger(pageSize);
+    if (!validPageSize) {
+        throw new syncerror_1.default(`Invalid pageSize parameter. Expected a positive integer, was '${pageSize}'.`, 400, 54455);
+    }
+}
+exports.validatePageSize = validatePageSize;
+function isInteger(number) {
+    return !isNaN(parseInt(number)) && isFinite(number);
+}
+function isPositiveInteger(number) {
+    return isInteger(number) && number > 0;
+}
+function isNonNegativeInteger(number) {
+    return isInteger(number) && number >= 0;
+}
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/utils/syncerror.js":
+/*!*********************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/utils/syncerror.js ***!
+  \*********************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+/**
+ * Generic SyncLibrary error class
+ */
+class SyncError extends Error {
+    constructor(message, status = 0, code = 0) {
+        super();
+        this.name = this.constructor.name;
+        this.message = `${message} (status: ${status}, code: ${code})`;
+        this.status = status;
+        this.code = code;
+    }
+}
+exports.SyncError = SyncError;
+class SyncNetworkError extends SyncError {
+    constructor(message, status = 0, code = 0, body) {
+        super(message, status, code);
+        this.body = body;
+    }
+}
+exports.SyncNetworkError = SyncNetworkError;
+exports.default = SyncError;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/utils/tree.js":
+/*!****************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/utils/tree.js ***!
+  \****************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+class Node {
+    constructor(key, value) {
+        this.balanceFactor = 0;
+        this.key = key;
+        this.value = value;
+        this.parent = null;
+        this.left = null;
+        this.right = null;
+    }
+    get isRoot() { return this.parent === null; }
+    get isLeaf() { return (this.left === null) && (this.right === null); }
+    get isLeftChild() { return this.parent.left === this; }
+    update(value) {
+        this.value = value;
+    }
+    replace(target, replacement) {
+        if (!target) {
+            return;
+        }
+        if (this.left === replacement) {
+            this.left = replacement;
+        }
+        else if (this.right === replacement) {
+            this.right = replacement;
+        }
+    }
+}
+/**
+ * @property length
+ */
+class TreeMap {
+    constructor(less, equal) {
+        this.isLessThan = less || ((x, y) => x < y);
+        this.isEqual = equal || ((x, y) => x === y);
+        this.root = null;
+        this.count = null;
+    }
+    get size() { return this.count; }
+    clear() {
+        this.root = null;
+        this.count = 0;
+    }
+    set(key, value) {
+        let node = this.getNode(key);
+        if (node) {
+            node.update(value);
+        }
+        else {
+            this.insert(key, value);
+        }
+        // return node;
+    }
+    insert(key, value) {
+        let node = new Node(key, value);
+        this.count++;
+        if (!this.root) {
+            this.root = node;
+            // return node;
+            return;
+        }
+        let currNode = this.root;
+        for (;;) {
+            if (this.isLessThan(key, currNode.key)) {
+                if (currNode.left) {
+                    currNode = currNode.left;
+                }
+                else {
+                    currNode.left = node;
+                    break;
+                }
+            }
+            else {
+                if (currNode.right) { // eslint-disable-line no-lonely-if
+                    currNode = currNode.right;
+                }
+                else {
+                    currNode.right = node;
+                    break;
+                }
+            }
+        }
+        node.parent = currNode;
+        currNode = node;
+        while (currNode.parent) {
+            let parent = currNode.parent;
+            let prevBalanceFactor = parent.balanceFactor;
+            if (currNode.isLeftChild) {
+                parent.balanceFactor++;
+            }
+            else {
+                parent.balanceFactor--;
+            }
+            if (Math.abs(parent.balanceFactor) < Math.abs(prevBalanceFactor)) {
+                break;
+            }
+            if (parent.balanceFactor < -1 || parent.balanceFactor > 1) {
+                this.rebalance(parent);
+                break;
+            }
+            currNode = parent;
+        }
+        // return node;
+    }
+    get(key) {
+        let currentNode = this.root;
+        while (currentNode) {
+            if (this.isEqual(key, currentNode.key)) {
+                return currentNode.value;
+            }
+            if (this.isLessThan(key, currentNode.key)) {
+                currentNode = currentNode.left;
+            }
+            else {
+                currentNode = currentNode.right;
+            }
+        }
+        return null;
+    }
+    delete(key) {
+        // update this algorithm and remove any
+        let node = this.getNode(key);
+        if (!node || node.key !== key) {
+            return null;
+        }
+        let parent = node.parent;
+        let left = node.left;
+        let right = node.right;
+        if (!!left !== !!right) { // one child
+            let child = left || right;
+            if (!parent && !child) {
+                this.root = null;
+            }
+            else if (parent && !child) {
+                this.root = child;
+            }
+            else {
+                parent.replace(node, null);
+                this.rebalance(parent);
+            }
+        }
+        else { // two children
+            let maxLeft = node.left;
+            while (maxLeft.right) {
+                maxLeft = maxLeft.right;
+            }
+            if (node.left === maxLeft) {
+                if (node.isRoot) {
+                    this.root = maxLeft;
+                    maxLeft.parent = null;
+                }
+                else {
+                    if (node.isLeftChild) {
+                        node.parent.left = maxLeft;
+                    }
+                    else {
+                        node.parent.right = maxLeft;
+                    }
+                    maxLeft.parent = node.parent;
+                }
+                maxLeft.right = node.right;
+                maxLeft.right.parent = maxLeft;
+                maxLeft.balanceFactor = node.balanceFactor;
+                node = {
+                    parent: maxLeft, isLeftChild: true
+                };
+            }
+            else {
+                let mlParent = maxLeft.parent;
+                let mlLeft = maxLeft.left;
+                mlParent.right = mlLeft;
+                if (mlLeft) {
+                    mlLeft.parent = mlParent;
+                }
+                if (node.isRoot) {
+                    this.root = maxLeft;
+                    maxLeft.parent = null;
+                }
+                else {
+                    if (node.isLeftChild) {
+                        node.parent.left = maxLeft;
+                    }
+                    else {
+                        node.parent.right = maxLeft;
+                    }
+                    maxLeft.parent = node.parent;
+                }
+                maxLeft.right = node.right;
+                maxLeft.right.parent = maxLeft;
+                maxLeft.left = node.left;
+                maxLeft.left.parent = maxLeft;
+                maxLeft.balanceFactor = node.balanceFactor;
+                node = {
+                    parent: mlParent, isLeftChild: false
+                };
+            }
+        }
+        this.count--;
+        while (node.parent) {
+            let parent = node.parent;
+            let prevBalanceFactor = parent.balanceFactor;
+            if (node.isLeftChild) {
+                parent.balanceFactor -= 1;
+            }
+            else {
+                parent.balanceFactor += 1;
+            }
+            if (Math.abs(parent.balanceFactor) > Math.abs(prevBalanceFactor)) {
+                if (parent.balanceFactor < -1 || parent.balanceFactor > 1) {
+                    this.rebalance(parent);
+                    if (parent.parent.balanceFactor === 0) {
+                        node = parent.parent;
+                    }
+                    else {
+                        break;
+                    }
+                }
+                else {
+                    break;
+                }
+            }
+            else {
+                node = parent;
+            }
+        }
+        return null;
+    }
+    getNode(key) {
+        let currentNode = this.root;
+        while (currentNode) {
+            if (this.isEqual(key, currentNode.key)) {
+                return currentNode;
+            }
+            if (this.isLessThan(key, currentNode.key)) {
+                currentNode = currentNode.left;
+            }
+            else {
+                currentNode = currentNode.right;
+            }
+        }
+        return null;
+    }
+    rebalance(node) {
+        if (node.balanceFactor < 0) {
+            if (node.right.balanceFactor > 0) {
+                this.rotateRight(node.right);
+                this.rotateLeft(node);
+            }
+            else {
+                this.rotateLeft(node);
+            }
+        }
+        else if (node.balanceFactor > 0) {
+            if (node.left.balanceFactor < 0) {
+                this.rotateLeft(node.left);
+                this.rotateRight(node);
+            }
+            else {
+                this.rotateRight(node);
+            }
+        }
+    }
+    rotateLeft(pivot) {
+        let root = pivot.right;
+        pivot.right = root.left;
+        if (root.left !== null) {
+            root.left.parent = pivot;
+        }
+        root.parent = pivot.parent;
+        if (root.parent === null) {
+            this.root = root;
+        }
+        else if (pivot.isLeftChild) {
+            root.parent.left = root;
+        }
+        else {
+            root.parent.right = root;
+        }
+        root.left = pivot;
+        pivot.parent = root;
+        pivot.balanceFactor = pivot.balanceFactor + 1 - Math.min(root.balanceFactor, 0);
+        root.balanceFactor = root.balanceFactor + 1 - Math.max(pivot.balanceFactor, 0);
+    }
+    rotateRight(pivot) {
+        let root = pivot.left;
+        pivot.left = root.right;
+        if (root.right !== null) {
+            root.right.parent = pivot;
+        }
+        root.parent = pivot.parent;
+        if (root.parent === null) {
+            this.root = root;
+        }
+        else if (pivot.isLeftChild) {
+            root.parent.left = root;
+        }
+        else {
+            root.parent.right = root;
+        }
+        root.right = pivot;
+        pivot.parent = root;
+        pivot.balanceFactor = pivot.balanceFactor - 1 - Math.min(root.balanceFactor, 0);
+        root.balanceFactor = root.balanceFactor - 1 - Math.max(pivot.balanceFactor, 0);
+    }
+    *[Symbol.iterator]() {
+        for (let iter of this.getIterator()) {
+            yield iter;
+        }
+    }
+    *getIterator(key = null) {
+        let currentNode = this.root;
+        while (currentNode) {
+            if (this.isEqual(key, currentNode.key) || ((key === null) && !currentNode.left)) {
+                break;
+            }
+            if (this.isLessThan(key, currentNode.key) || (key === null)) {
+                currentNode = currentNode.left;
+            }
+            else {
+                currentNode = currentNode.right;
+            }
+        }
+        if (!currentNode) {
+            return null;
+        }
+        let fromleft = true;
+        for (;;) {
+            if (fromleft) {
+                yield [currentNode.key, currentNode.value];
+                fromleft = false;
+                if (currentNode.right) {
+                    currentNode = currentNode.right;
+                    while (currentNode.left) {
+                        currentNode = currentNode.left;
+                    }
+                    fromleft = true;
+                }
+                else if (currentNode.parent) {
+                    fromleft = (currentNode.parent.left === currentNode);
+                    currentNode = currentNode.parent;
+                }
+                else {
+                    break;
+                }
+            }
+            else if (currentNode.parent) {
+                fromleft = (currentNode.parent.left === currentNode);
+                currentNode = currentNode.parent;
+            }
+            else {
+                break;
+            }
+        }
+        return null;
+    }
+    *getReverseIterator(key = null) {
+        let currentNode = this.root;
+        while (currentNode) {
+            if (this.isEqual(key, currentNode.key) || ((key === null) && !currentNode.right)) {
+                break;
+            }
+            if (!this.isLessThan(key, currentNode.key) || (key === null)) {
+                currentNode = currentNode.right;
+            }
+            else {
+                currentNode = currentNode.left;
+            }
+        }
+        if (!currentNode) {
+            return null;
+        }
+        let fromright = true;
+        for (;;) {
+            if (fromright) {
+                yield [currentNode.key, currentNode.value];
+                fromright = false;
+                if (currentNode.left) {
+                    currentNode = currentNode.left;
+                    while (currentNode.right) {
+                        currentNode = currentNode.right;
+                    }
+                    fromright = true;
+                }
+                else if (currentNode.parent) {
+                    fromright = (currentNode.parent.right === currentNode);
+                    currentNode = currentNode.parent;
+                }
+                else {
+                    break;
+                }
+            }
+            else if (currentNode.parent) {
+                fromright = (currentNode.parent.right === currentNode);
+                currentNode = currentNode.parent;
+            }
+            else {
+                break;
+            }
+        }
+        return null;
+    }
+}
+exports.TreeMap = TreeMap;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/lib/utils/uri.js":
+/*!***************************************************!*\
+  !*** ./node_modules/twilio-sync/lib/utils/uri.js ***!
+  \***************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+/**
+ * Construct URI with query parameters
+ */
+class UriBuilder {
+    constructor(base) {
+        this.base = base;
+        this.args = new Array();
+        this.paths = new Array();
+    }
+    pathSegment(name) {
+        this.paths.push(encodeURIComponent(name));
+        return this;
+    }
+    queryParam(name, value) {
+        if (typeof value !== 'undefined') {
+            this.args.push(encodeURIComponent(name) + '=' + encodeURIComponent(value));
+        }
+        return this;
+    }
+    build() {
+        let result = this.base;
+        if (this.paths.length) {
+            result += '/' + this.paths.join('/');
+        }
+        if (this.args.length) {
+            result += '?' + this.args.join('&');
+        }
+        return result;
+    }
+}
+exports.UriBuilder = UriBuilder;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilio-sync/package.json":
+/*!***********************************************!*\
+  !*** ./node_modules/twilio-sync/package.json ***!
+  \***********************************************/
+/*! exports provided: _from, _id, _inBundle, _integrity, _location, _phantomChildren, _requested, _requiredBy, _resolved, _shasum, _spec, _where, author, browserify, bundleDependencies, dependencies, deprecated, description, devDependencies, engines, license, main, name, types, version, default */
+/***/ (function(module) {
+
+module.exports = JSON.parse("{\"_from\":\"twilio-sync\",\"_id\":\"twilio-sync@0.12.0\",\"_inBundle\":false,\"_integrity\":\"sha512-zYk/eJdYZaKApKjpEQIyX/bzwT6QicO8+XwKr6XXimj3DkMJqYKDNPVLmPOKi98LOojpYETI1fjCUuJwK23Z4Q==\",\"_location\":\"/twilio-sync\",\"_phantomChildren\":{},\"_requested\":{\"type\":\"tag\",\"registry\":true,\"raw\":\"twilio-sync\",\"name\":\"twilio-sync\",\"escapedName\":\"twilio-sync\",\"rawSpec\":\"\",\"saveSpec\":null,\"fetchSpec\":\"latest\"},\"_requiredBy\":[\"#USER\",\"/\"],\"_resolved\":\"https://registry.npmjs.org/twilio-sync/-/twilio-sync-0.12.0.tgz\",\"_shasum\":\"d89339237cffb25679ae04fa5ecdab123d0e0d2b\",\"_spec\":\"twilio-sync\",\"_where\":\"/Users/ghockin/www/chatemon-laravel\",\"author\":{\"name\":\"Twilio\"},\"browserify\":{\"transform\":[\"babelify\"]},\"bundleDependencies\":false,\"dependencies\":{\"loglevel\":\"^1.6.3\",\"operation-retrier\":\"^3.0.0\",\"platform\":\"^1.3.5\",\"twilio-notifications\":\"^0.5.8\",\"twilsock\":\"^0.5.11\",\"uuid\":\"^3.3.2\"},\"deprecated\":false,\"description\":\"Twilio Sync client library\",\"devDependencies\":{\"@types/chai\":\"^4.1.7\",\"@types/chai-as-promised\":\"7.1.0\",\"@types/chai-string\":\"^1.4.1\",\"@types/mocha\":\"^5.2.7\",\"@types/node\":\"^12.0.4\",\"@types/sinon\":\"^7.0.12\",\"@types/sinon-chai\":\"^3.2.2\",\"async-test-tools\":\"^1.0.7\",\"babel-core\":\"^6.26.0\",\"babel-plugin-transform-builtin-extend\":\"^1.1.2\",\"babel-plugin-transform-runtime\":\"^6.23.0\",\"babel-preset-env\":\"^1.6.1\",\"babel-runtime\":\"^6.26.0\",\"babelify\":\"^8.0.0\",\"browserify\":\"^16.2.3\",\"chai\":\"^4.2.0\",\"chai-as-promised\":\"^7.1.1\",\"chai-string\":\"^1.5.0\",\"cheerio\":\"^1.0.0-rc.2\",\"cross-env\":\"^5.2.0\",\"del\":\"^4.1.1\",\"fancy-log\":\"^1.3.3\",\"fs\":\"0.0.2\",\"gulp\":\"^4.0.2\",\"gulp-babel\":\"^7.0.1\",\"gulp-derequire\":\"^2.1.0\",\"gulp-if\":\"^2.0.2\",\"gulp-insert\":\"^0.5.0\",\"gulp-rename\":\"^1.4.0\",\"gulp-sourcemaps\":\"^2.6.5\",\"gulp-tap\":\"^1.0.1\",\"gulp-tslint\":\"^8.1.4\",\"gulp-typescript\":\"^5.0.1\",\"gulp-uglify-es\":\"^1.0.4\",\"ink-docstrap\":\"^1.3.2\",\"jsdoc\":\"~3.5.5\",\"jsonwebtoken\":\"^8.5.1\",\"karma\":\"^4.1.0\",\"karma-browserify\":\"^6.0.0\",\"karma-browserstack-launcher\":\"^1.5.1\",\"karma-mocha\":\"^1.3.0\",\"karma-mocha-reporter\":\"^2.2.5\",\"mocha\":\"^6.1.4\",\"nyc\":\"^14.1.1\",\"path\":\"^0.12.7\",\"sinon\":\"^7.3.2\",\"sinon-chai\":\"^3.3.0\",\"source-map-explorer\":\"^1.8.0\",\"ts-node\":\"^8.2.0\",\"tslint\":\"^5.17.0\",\"twilio\":\"^3.31.1\",\"typescript\":\"^3.5.1\",\"uglify-es\":\"^3.3.10\",\"uglify-save-license\":\"^0.4.1\",\"underscore\":\"^1.9.1\",\"vinyl-buffer\":\"^1.0.1\",\"vinyl-source-stream\":\"^2.0.0\",\"watchify\":\"^3.11.1\"},\"engines\":{\"node\":\">=8\"},\"license\":\"MIT\",\"main\":\"lib/index.js\",\"name\":\"twilio-sync\",\"types\":\"./lib/index.d.ts\",\"version\":\"0.12.0\"}");
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/backoffretrier.js":
+/*!*****************************************************!*\
+  !*** ./node_modules/twilsock/lib/backoffretrier.js ***!
+  \*****************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+const operation_retrier_1 = __webpack_require__(/*! operation-retrier */ "./node_modules/operation-retrier/lib/index.js");
+/**
+ * Retrier with backoff override capability
+*/
+class BackoffRetrier extends events_1.EventEmitter {
+    get inProgress() { return !!this.retrier; }
+    constructor(options) {
+        super();
+        this.options = options ? Object.assign({}, options) : {};
+    }
+    /**
+     * Should be called once per attempt series to start retrier.
+    */
+    start() {
+        if (this.inProgress) {
+            throw new Error('Already waiting for next attempt, call finishAttempt(success : boolean) to finish it');
+        }
+        this.createRetrier();
+    }
+    /**
+     * Should be called to stop retrier entirely.
+    */
+    stop() {
+        this.cleanRetrier();
+        this.newBackoff = null;
+        this.usedBackoff = null;
+    }
+    /**
+     * Modifies backoff for next attempt.
+     * Expected behavior:
+     * - If there was no backoff passed previously reschedulling next attempt to given backoff
+     * - If previous backoff was longer then ignoring this one.
+     * - If previous backoff was shorter then reschedulling with this one.
+     * With or without backoff retrier will keep growing normally.
+     * @param delay delay of next attempts in ms.
+     */
+    modifyBackoff(delay) {
+        this.newBackoff = delay;
+    }
+    /**
+     * Mark last emmited attempt as failed, initiating either next of fail if limits were hit.
+    */
+    attemptFailed() {
+        if (!this.inProgress) {
+            throw new Error('No attempt is in progress');
+        }
+        if (this.newBackoff) {
+            const shouldUseNewBackoff = !this.usedBackoff || this.usedBackoff < this.newBackoff;
+            if (shouldUseNewBackoff) {
+                this.createRetrier();
+            }
+            else {
+                this.retrier.failed(new Error());
+            }
+        }
+        else {
+            this.retrier.failed(new Error());
+        }
+    }
+    cancel() {
+        if (this.retrier) {
+            this.retrier.cancel();
+        }
+    }
+    cleanRetrier() {
+        if (this.retrier) {
+            this.retrier.removeAllListeners();
+            this.retrier.cancel();
+            this.retrier = null;
+        }
+    }
+    getRetryPolicy() {
+        const clone = Object.assign({}, this.options);
+        if (this.newBackoff) {
+            clone.min = this.newBackoff;
+            clone.max = this.options.max && this.options.max > this.newBackoff
+                ? this.options.max
+                : this.newBackoff;
+        }
+        // As we're always skipping first attempt we should add one extra if limit is present
+        clone.maxAttemptsCount = this.options.maxAttemptsCount
+            ? this.options.maxAttemptsCount + 1
+            : undefined;
+        return clone;
+    }
+    createRetrier() {
+        this.cleanRetrier();
+        const retryPolicy = this.getRetryPolicy();
+        this.retrier = new operation_retrier_1.Retrier(retryPolicy);
+        this.retrier.once('attempt', () => {
+            this.retrier.on('attempt', () => this.emit('attempt'));
+            this.retrier.failed(new Error('Skipping first attempt'));
+        });
+        this.retrier.on('failed', err => this.emit('failed', err));
+        this.usedBackoff = this.newBackoff;
+        this.newBackoff = null;
+        this.retrier.start()
+            .catch(err => { });
+    }
+}
+exports.BackoffRetrier = BackoffRetrier;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/client.js":
+/*!*********************************************!*\
+  !*** ./node_modules/twilsock/lib/client.js ***!
+  \*********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+const logger_1 = __webpack_require__(/*! ./logger */ "./node_modules/twilsock/lib/logger.js");
+const configuration_1 = __webpack_require__(/*! ./configuration */ "./node_modules/twilsock/lib/configuration.js");
+const twilsock_1 = __webpack_require__(/*! ./twilsock */ "./node_modules/twilsock/lib/twilsock.js");
+const packetinterface_1 = __webpack_require__(/*! ./packetinterface */ "./node_modules/twilsock/lib/packetinterface.js");
+const websocketchannel_1 = __webpack_require__(/*! ./websocketchannel */ "./node_modules/twilsock/lib/websocketchannel.js");
+const registrations_1 = __webpack_require__(/*! ./services/registrations */ "./node_modules/twilsock/lib/services/registrations.js");
+const upstream_1 = __webpack_require__(/*! ./services/upstream */ "./node_modules/twilsock/lib/services/upstream.js");
+const deferred_1 = __webpack_require__(/*! ./deferred */ "./node_modules/twilsock/lib/deferred.js");
+const index_1 = __webpack_require__(/*! ./index */ "./node_modules/twilsock/lib/index.js");
+const offlinestorage_1 = __webpack_require__(/*! ./offlinestorage */ "./node_modules/twilsock/lib/offlinestorage.js");
+const tokenStorage_1 = __webpack_require__(/*! ./tokenStorage */ "./node_modules/twilsock/lib/tokenStorage.js");
+/**
+ * @alias Twilsock
+ * @classdesc Client library for the Twilsock service
+ * It allows to recevie service-generated updates as well as bi-directional transport
+ * @fires Twilsock#message
+ * @fires Twilsock#connected
+ * @fires Twilsock#disconnected
+ * @fires Twilsock#tokenAboutToExpire
+ * @fires Twilsock#stateChanged
+ * @fires Twilsock#connectionError
+ */
+class TwilsockClient extends events_1.EventEmitter {
+    /**
+     * @param {string} token Twilio access token
+     * @param {string} productId Product identifier. Should be the same as a grant name in token
+     */
+    constructor(token, productId, options = {}) {
+        super();
+        this.offlineStorageDeferred = new deferred_1.Deferred();
+        options.continuationToken = options.continuationToken ? options.continuationToken : tokenStorage_1.TokenStorage.getStoredToken(productId);
+        let config = this.config = new configuration_1.Configuration(token, productId, options);
+        logger_1.log.setLevel(config.logLevel);
+        let websocket = new websocketchannel_1.WebSocketChannel(config.url);
+        let transport = options.transport
+            ? options.transport
+            : new packetinterface_1.PacketInterface(websocket, config);
+        this.channel = options.channel
+            ? options.channel
+            : new twilsock_1.TwilsockImpl(websocket, transport, config);
+        this.registrations = options.registrations
+            ? options.registrations
+            : new registrations_1.Registrations(transport);
+        this.upstream = new upstream_1.Upstream(transport, this.channel, config);
+        this.registrations.on('registered', (id) => this.emit('registered', id));
+        this.channel.on('message', (type, message) => setTimeout(() => this.emit('message', type, message), 0));
+        this.channel.on('stateChanged', state => setTimeout(() => this.emit('stateChanged', state), 0));
+        this.channel.on('connectionError', (connectionError) => setTimeout(() => this.emit('connectionError', connectionError), 0));
+        this.channel.on('tokenAboutToExpire', () => setTimeout(() => this.emit('tokenAboutToExpire'), 0));
+        this.channel.on('tokenExpired', () => setTimeout(() => this.emit('tokenExpired'), 0));
+        this.channel.on('connected', () => this.registrations.updateRegistrations());
+        this.channel.on('connected', () => this.upstream.sendPendingMessages());
+        this.channel.on('connected', () => setTimeout(() => this.emit('connected'), 0));
+        this.channel.on('initialized', (initReply) => {
+            this.handleStorageId(productId, initReply);
+            tokenStorage_1.TokenStorage.storeToken(initReply.continuationToken, productId);
+            setTimeout(() => this.emit('initialized', initReply), 0);
+        });
+        this.channel.on('disconnected', () => setTimeout(() => this.emit('disconnected'), 0));
+        this.channel.on('disconnected', () => this.upstream.rejectPendingMessages());
+        this.channel.on('disconnected', () => this.offlineStorageDeferred.fail(new index_1.TwilsockError('Client disconnected')));
+        this.offlineStorageDeferred.promise.catch(() => { });
+    }
+    emit(event, ...args) {
+        logger_1.log.debug(`Emitting ${event.toString()}(${args.map(a => JSON.stringify(a)).join(', ')})`);
+        return super.emit(event, ...args);
+    }
+    handleStorageId(productId, initReply) {
+        if (!initReply.offlineStorage) {
+            this.offlineStorageDeferred.fail(new index_1.TwilsockError('No offline storage id'));
+        }
+        else if (initReply.offlineStorage.hasOwnProperty(productId)) {
+            try {
+                this.offlineStorageDeferred.set(offlinestorage_1.OfflineProductStorage.create(initReply.offlineStorage[productId]));
+                logger_1.log.debug(`Offline storage for '${productId}' product: ${JSON.stringify(initReply.offlineStorage[productId])}.`);
+            }
+            catch (e) {
+                this.offlineStorageDeferred.fail(new index_1.TwilsockError(`Failed to parse offline storage for ${productId} ${JSON.stringify(initReply.offlineStorage[productId])}. ${e}.`));
+            }
+        }
+        else {
+            this.offlineStorageDeferred.fail(new index_1.TwilsockError(`No offline storage id for '${productId}' product: ${JSON.stringify(initReply.offlineStorage)}`));
+        }
+    }
+    /**
+     * Get offline storage ID
+     * @returns {Promise<OfflineProductStorage>}
+     */
+    storageId() {
+        return this.offlineStorageDeferred.promise;
+    }
+    /**
+     * Indicates if twilsock is connected now
+     * @returns {Boolean}
+     */
+    get isConnected() {
+        return this.channel.isConnected;
+    }
+    /**
+     * Current state
+     * @returns {String}
+     */
+    get state() {
+        return this.channel.state;
+    }
+    /**
+     * Update token
+     * @param {String} token
+     * @returns {Promise<void>}
+     */
+    async updateToken(token) {
+        logger_1.log.trace(`updating token '${token}'`);
+        if (this.config.token === token) {
+            return;
+        }
+        this.config.updateToken(token);
+        return this.channel.updateToken(token);
+    }
+    /**
+     * Updates notification context.
+     * This method shouldn't be used anyone except twilio notifications library
+     * @param contextId id of notification context
+     * @param context value of notification context
+     * @private
+     */
+    setNotificationsContext(contextId, context) {
+        this.registrations.setNotificationsContext(contextId, context);
+    }
+    /**
+     * Remove notification context.
+     * This method shouldn't be used anyone except twilio notifications library
+     * @param contextId id of notification context
+     * @private
+     */
+    removeNotificationsContext(contextId) {
+        this.registrations.removeNotificationsContext(contextId);
+    }
+    /**
+     * Connect to the server
+     * @fires Twilsock#connected
+     * @public
+     * @returns {Promise<void>}
+     */
+    connect() {
+        return this.channel.connect();
+    }
+    /**
+     * Disconnect from the server
+     * @fires Twilsock#disconnected
+     * @public
+     * @returns {Promise<void>}
+     */
+    disconnect() {
+        return this.channel.disconnect();
+    }
+    /**
+     * Get HTTP request to upstream service
+     * @param {string} url Upstream service url
+     * @param {headers} headers Set of custom headers
+     * @returns {Promise}
+     */
+    get(url, headers) {
+        return this.upstream.send('GET', url, headers);
+    }
+    /**
+     * Post HTTP request to upstream service
+     * @param {string} url Upstream service url
+     * @param {headers} headers Set of custom headers
+     * @param {body} body Body to send
+     * @returns {Promise}
+     */
+    post(url, headers, body) {
+        return this.upstream.send('POST', url, headers, body);
+    }
+    /**
+     * Put HTTP request to upstream service
+     * @param {string} url Upstream service url
+     * @param {headers} headers Set of custom headers
+     * @param {body} body Body to send
+     * @returns {Promise}
+     */
+    put(url, headers, body) {
+        return this.upstream.send('PUT', url, headers, body);
+    }
+    /**
+     * Delete HTTP request to upstream service
+     * @param {string} url Upstream service url
+     * @param {headers} headers Set of custom headers
+     * @returns {Promise}
+     */
+    delete(url, headers) {
+        return this.upstream.send('DELETE', url, headers);
+    }
+}
+exports.TwilsockClient = TwilsockClient;
+exports.Twilsock = TwilsockClient;
+/**
+ * Twilsock destination address descriptor
+ * @typedef {Object} Twilsock#Address
+ * @property {String} method - HTTP method. (POST, PUT, etc)
+ * @property {String} host - host name without path. (e.g. my.company.com)
+ * @property {String} path - path on the host (e.g. /my/app/to/call.php)
+ */
+/**
+ * Twilsock upstream message
+ * @typedef {Object} Twilsock#Message
+ * @property {Twilsock#Address} to - destination address
+ * @property {Object} headers - HTTP headers
+ * @property {Object} body - Body
+ */
+/**
+ * Fired when new message received
+ * @param {Twilsock#Message} message
+ * @event Twilsock#message
+ */
+/**
+ * Fired when socket connected
+ * @param {String} URI of endpoint
+ * @event Twilsock#connected
+ */
+/**
+ * Fired when socket disconnected
+ * @event Twilsock#disconnected
+ */
+/**
+ * Fired when token is about to expire and should be updated
+ * @event Twilsock#tokenAboutToExpire
+ */
+/**
+* Fired when socket connected
+* @param {('connecting'|'connected'|'rejected'|'disconnecting'|'disconnected')} state - general twilsock state
+* @event Twilsock#stateChanged
+*/
+/**
+ * Fired when connection is interrupted by unexpected reason
+ * @type {Object}
+ * @property {Boolean} terminal - twilsock will stop connection attempts
+ * @property {String} message - root cause
+ * @property {Number} [httpStatusCode] - http status code if available
+ * @property {Number} [errorCode] - Twilio public error code if available
+ * @event Twilsock#connectionError
+ */
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/configuration.js":
+/*!****************************************************!*\
+  !*** ./node_modules/twilsock/lib/configuration.js ***!
+  \****************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+let packageVersion = '0.5.11';
+/**
+ * Settings container for the Twilsock client library
+ */
+class Configuration {
+    /**
+     * @param {String} token - authentication token
+     * @param {Object} options - options to override defaults
+     */
+    constructor(token, activeGrant, options = {}) {
+        this.activeGrant = activeGrant;
+        this._token = token;
+        const region = options.region || 'us1';
+        const defaultTwilsockUrl = `wss://tsock.${region}.twilio.com/v3/wsconnect`;
+        let twilsockOptions = options.twilsock || options.Twilsock || {};
+        this.url = twilsockOptions.uri || defaultTwilsockUrl;
+        this._continuationToken = options.continuationToken ? options.continuationToken : null;
+        this.logLevel = options.logLevel ? options.logLevel : 'error';
+        this.retryPolicy = options.retryPolicy
+            ? options.retryPolicy
+            : {
+                min: 1 * 1000,
+                max: 2 * 60 * 1000,
+                randomness: 0.2
+            };
+        this.clientMetadata = options.clientMetadata
+            ? options.clientMetadata
+            : {};
+        this.clientMetadata.ver = packageVersion;
+        this.initRegistrations = options.initRegistrations
+            ? options.initRegistrations
+            : null;
+        this.tweaks = options.tweaks
+            ? options.tweaks
+            : null;
+    }
+    get token() { return this._token; }
+    get continuationToken() { return this._continuationToken; }
+    updateToken(token) {
+        this._token = token;
+    }
+    updateContinuationToken(continuationToken) {
+        this._continuationToken = continuationToken;
+    }
+}
+exports.Configuration = Configuration;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/deferred.js":
+/*!***********************************************!*\
+  !*** ./node_modules/twilsock/lib/deferred.js ***!
+  \***********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+class Deferred {
+    constructor() {
+        this._promise = new Promise((resolve, reject) => {
+            this._resolve = resolve;
+            this._reject = reject;
+        });
+    }
+    get promise() {
+        return this._promise;
+    }
+    update(value) {
+        this._resolve(value);
+    }
+    set(value) {
+        this.current = value;
+        this._resolve(value);
+    }
+    fail(e) {
+        this._reject(e);
+    }
+}
+exports.Deferred = Deferred;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/error/transportunavailableerror.js":
+/*!**********************************************************************!*\
+  !*** ./node_modules/twilsock/lib/error/transportunavailableerror.js ***!
+  \**********************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const twilsockerror_1 = __webpack_require__(/*! ./twilsockerror */ "./node_modules/twilsock/lib/error/twilsockerror.js");
+class TransportUnavailableError extends twilsockerror_1.TwilsockError {
+    constructor(description) {
+        super(description);
+    }
+}
+exports.TransportUnavailableError = TransportUnavailableError;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/error/twilsockerror.js":
+/*!**********************************************************!*\
+  !*** ./node_modules/twilsock/lib/error/twilsockerror.js ***!
+  \**********************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+class TwilsockError extends Error {
+    constructor(description) {
+        super(description);
+    }
+}
+exports.TwilsockError = TwilsockError;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/error/twilsockreplyerror.js":
+/*!***************************************************************!*\
+  !*** ./node_modules/twilsock/lib/error/twilsockreplyerror.js ***!
+  \***************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const twilsockerror_1 = __webpack_require__(/*! ./twilsockerror */ "./node_modules/twilsock/lib/error/twilsockerror.js");
+class TwilsockReplyError extends twilsockerror_1.TwilsockError {
+    constructor(description, reply) {
+        super(description);
+        this.reply = reply;
+    }
+}
+exports.TwilsockReplyError = TwilsockReplyError;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/error/twilsockupstreamerror.js":
+/*!******************************************************************!*\
+  !*** ./node_modules/twilsock/lib/error/twilsockupstreamerror.js ***!
+  \******************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const twilsockerror_1 = __webpack_require__(/*! ./twilsockerror */ "./node_modules/twilsock/lib/error/twilsockerror.js");
+class TwilsockUpstreamError extends twilsockerror_1.TwilsockError {
+    constructor(status, description, body) {
+        super(description);
+        this.status = status;
+        this.description = description;
+        this.body = body;
+    }
+}
+exports.TwilsockUpstreamError = TwilsockUpstreamError;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/index.js":
+/*!********************************************!*\
+  !*** ./node_modules/twilsock/lib/index.js ***!
+  \********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const client_1 = __webpack_require__(/*! ./client */ "./node_modules/twilsock/lib/client.js");
+exports.TwilsockClient = client_1.TwilsockClient;
+exports.Twilsock = client_1.TwilsockClient;
+const twilsockerror_1 = __webpack_require__(/*! ./error/twilsockerror */ "./node_modules/twilsock/lib/error/twilsockerror.js");
+exports.TwilsockError = twilsockerror_1.TwilsockError;
+const transportunavailableerror_1 = __webpack_require__(/*! ./error/transportunavailableerror */ "./node_modules/twilsock/lib/error/transportunavailableerror.js");
+exports.TransportUnavailableError = transportunavailableerror_1.TransportUnavailableError;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/logger.js":
+/*!*********************************************!*\
+  !*** ./node_modules/twilsock/lib/logger.js ***!
+  \*********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const log = __webpack_require__(/*! loglevel */ "./node_modules/loglevel/lib/loglevel.js");
+function prepareLine(prefix, args) {
+    return [`${new Date().toISOString()} Twilsock ${prefix}:`].concat(Array.from(args));
+}
+class Logger {
+    constructor(prefix) {
+        this.prefix = '';
+        this.prefix = prefix !== null && prefix !== undefined && prefix.length > 0
+            ? ' ' + prefix + ':'
+            : '';
+    }
+    setLevel(level) {
+        log.setLevel(level);
+    }
+    static setLevel(level) {
+        log.setLevel(level);
+    }
+    trace(...args) { log.debug.apply(null, prepareLine('T', args)); }
+    debug(...args) { log.debug.apply(null, prepareLine('D', args)); }
+    info(...args) { log.info.apply(null, prepareLine('I', args)); }
+    warn(...args) { log.warn.apply(null, prepareLine('W', args)); }
+    error(...args) { log.error.apply(null, prepareLine('E', args)); }
+    static trace(...args) { log.trace.apply(null, prepareLine('T', args)); }
+    static debug(...args) { log.debug.apply(null, prepareLine('D', args)); }
+    static info(...args) { log.info.apply(null, prepareLine('I', args)); }
+    static warn(...args) { log.warn.apply(null, prepareLine('W', args)); }
+    static error(...args) { log.error.apply(null, prepareLine('E', args)); }
+}
+exports.Logger = Logger;
+let logInstance = new Logger('');
+exports.log = logInstance;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/metadata.js":
+/*!***********************************************!*\
+  !*** ./node_modules/twilsock/lib/metadata.js ***!
+  \***********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const platform = __webpack_require__(/*! platform */ "./node_modules/platform/platform.js");
+class Metadata {
+    static getMetadata(options) {
+        let platformInfo = typeof navigator !== 'undefined'
+            ? platform.parse(navigator.userAgent)
+            : platform;
+        let overrides = options && options.clientMetadata
+            ? options.clientMetadata
+            : {};
+        const fieldNames = ['ver', 'env', 'envv', 'os', 'osv', 'osa',
+            'type', 'sdk', 'sdkv', 'dev', 'devv', 'devt', 'app', 'appv'];
+        const defaults = {
+            'env': platform.name,
+            'envv': platform.version,
+            'os': platform.os.family,
+            'osv': platform.os.version,
+            'osa': platform.os.architecture,
+            'sdk': 'js-default'
+        };
+        let finalClientMetadata = {};
+        fieldNames
+            .filter(key => key in overrides || key in defaults)
+            .forEach(key => finalClientMetadata[key] = key in overrides ? overrides[key] : defaults[key]);
+        return finalClientMetadata;
+    }
+}
+exports.Metadata = Metadata;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/offlinestorage.js":
+/*!*****************************************************!*\
+  !*** ./node_modules/twilsock/lib/offlinestorage.js ***!
+  \*****************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const index_1 = __webpack_require__(/*! ./index */ "./node_modules/twilsock/lib/index.js");
+class OfflineProductStorage {
+    constructor(id) {
+        this.id = id;
+    }
+    static create(productPayload) {
+        if (productPayload instanceof Object && 'storage_id' in productPayload) {
+            return new OfflineProductStorage(productPayload.storage_id);
+        }
+        else {
+            throw new index_1.TwilsockError('Field "storage_id" is missing');
+        }
+    }
+}
+exports.OfflineProductStorage = OfflineProductStorage;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/packetinterface.js":
+/*!******************************************************!*\
+  !*** ./node_modules/twilsock/lib/packetinterface.js ***!
+  \******************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const logger_1 = __webpack_require__(/*! ./logger */ "./node_modules/twilsock/lib/logger.js");
+const uuid_1 = __webpack_require__(/*! uuid */ "./node_modules/uuid/index.js");
+const twilsockerror_1 = __webpack_require__(/*! ./error/twilsockerror */ "./node_modules/twilsock/lib/error/twilsockerror.js");
+const twilsockreplyerror_1 = __webpack_require__(/*! ./error/twilsockreplyerror */ "./node_modules/twilsock/lib/error/twilsockreplyerror.js");
+const parser_1 = __webpack_require__(/*! ./parser */ "./node_modules/twilsock/lib/parser.js");
+const Messages = __webpack_require__(/*! ./protocol/messages */ "./node_modules/twilsock/lib/protocol/messages/index.js");
+const metadata_1 = __webpack_require__(/*! ./metadata */ "./node_modules/twilsock/lib/metadata.js");
+const REQUEST_TIMEOUT = 30000;
+function isHttpSuccess(code) {
+    return (code >= 200 && code < 300);
+}
+/**
+ * Makes sure that body is properly stringified
+ */
+function preparePayload(payload) {
+    switch (typeof payload) {
+        case 'undefined':
+            return '';
+        case 'object':
+            return JSON.stringify(payload);
+        default:
+            return payload;
+    }
+}
+class PacketRequest {
+}
+class PacketResponse {
+}
+exports.PacketResponse = PacketResponse;
+class PacketInterface {
+    constructor(channel, config) {
+        this.config = config;
+        this.activeRequests = new Map();
+        this.channel = channel;
+        this.channel.on('reply', reply => this.processReply(reply));
+        this.channel.on('disconnected', () => {
+            this.activeRequests.forEach(descriptor => {
+                clearTimeout(descriptor.timeout);
+                descriptor.reject(new twilsockerror_1.TwilsockError('disconnected'));
+            });
+            this.activeRequests.clear();
+        });
+    }
+    get isConnected() { return this.channel.isConnected; }
+    processReply(reply) {
+        const request = this.activeRequests.get(reply.id);
+        if (request) {
+            clearTimeout(request.timeout);
+            this.activeRequests.delete(reply.id);
+            if (!isHttpSuccess(reply.status.code)) {
+                request.reject(new twilsockreplyerror_1.TwilsockReplyError('Transport failure: ' + reply.status.status, reply));
+                logger_1.log.trace('message rejected');
+            }
+            else {
+                request.resolve(reply);
+            }
+        }
+    }
+    storeRequest(id, resolve, reject) {
+        let requestDescriptor = {
+            resolve: resolve,
+            reject: reject,
+            timeout: setTimeout(() => {
+                logger_1.log.trace('request', id, 'is timed out');
+                reject(new twilsockerror_1.TwilsockError('Twilsock: request timeout: ' + id));
+            }, REQUEST_TIMEOUT)
+        };
+        this.activeRequests.set(id, requestDescriptor);
+    }
+    shutdown() {
+        this.activeRequests.forEach((descriptor) => {
+            clearTimeout(descriptor.timeout);
+            descriptor.reject(new twilsockerror_1.TwilsockError('Twilsock: request cancelled by user'));
+        });
+        this.activeRequests.clear();
+    }
+    async sendInit() {
+        logger_1.log.trace('sendInit');
+        let metadata = metadata_1.Metadata.getMetadata(this.config);
+        let message = new Messages.Init(this.config.token, this.config.continuationToken, metadata, this.config.initRegistrations, this.config.tweaks);
+        let response = await this.sendWithReply(message);
+        return new Messages.InitReply(response.id, response.header.continuation_token, response.header.continuation_token_status, response.header.offline_storage, response.header.init_registrations, response.header.debug_info);
+    }
+    sendClose() {
+        let message = new Messages.Close();
+        this.send(message);
+    }
+    sendWithReply(header, payload) {
+        return new Promise((resolve, reject) => {
+            let id = this.send(header, payload);
+            this.storeRequest(id, resolve, reject);
+        });
+    }
+    send(header, payload) {
+        header.id = header.id || `TM${uuid_1.v4()}`;
+        let message = parser_1.Parser.createPacket(header, preparePayload(payload));
+        try {
+            this.channel.send(message);
+            return header.id;
+        }
+        catch (e) {
+            logger_1.log.debug('failed to send ', header, e);
+            logger_1.log.trace(e.stack);
+            throw e;
+        }
+    }
+}
+exports.PacketInterface = PacketInterface;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/parser.js":
+/*!*********************************************!*\
+  !*** ./node_modules/twilsock/lib/parser.js ***!
+  \*********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const logger_1 = __webpack_require__(/*! ./logger */ "./node_modules/twilsock/lib/logger.js");
+function byteLength(s) {
+    let escstr = encodeURIComponent(s);
+    let binstr = escstr.replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1));
+    return binstr.length;
+}
+function stringToUint8Array(s) {
+    let escstr = encodeURIComponent(s);
+    let binstr = escstr.replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1));
+    let ua = new Uint8Array(binstr.length);
+    Array.prototype.forEach.call(binstr, (ch, i) => { ua[i] = ch.charCodeAt(0); });
+    return ua;
+}
+function uint8ArrayToString(ua) {
+    let binstr = Array.prototype.map.call(ua, ch => String.fromCharCode(ch)).join('');
+    let escstr = binstr.replace(/(.)/g, (m, p) => {
+        let code = p.charCodeAt(0).toString(16).toUpperCase();
+        if (code.length < 2) {
+            code = '0' + code;
+        }
+        return '%' + code;
+    });
+    return decodeURIComponent(escstr);
+}
+function getJsonObject(array) {
+    return JSON.parse(uint8ArrayToString(array));
+}
+function getMagic(buffer) {
+    let strMagic = '';
+    let idx = 0;
+    for (; idx < buffer.length; ++idx) {
+        const chr = String.fromCharCode(buffer[idx]);
+        strMagic += chr;
+        if (chr === '\r') {
+            idx += 2;
+            break;
+        }
+    }
+    const magics = strMagic.split(' ');
+    return {
+        size: idx,
+        protocol: magics[0],
+        version: magics[1],
+        headerSize: Number(magics[2])
+    };
+}
+class Parser {
+    constructor() { }
+    static parse(message) {
+        const fieldMargin = 2;
+        const dataView = new Uint8Array(message);
+        const magic = getMagic(dataView);
+        if (magic.protocol !== 'TWILSOCK' || magic.version !== 'V3.0') {
+            logger_1.log.error(`unsupported protocol: ${magic.protocol} ver ${magic.version}`);
+            //throw new Error('Unsupported protocol');
+            //this.fsm.unsupportedProtocol();
+            return;
+        }
+        let header = null;
+        try {
+            header = getJsonObject(dataView.subarray(magic.size, magic.size + magic.headerSize));
+        }
+        catch (e) {
+            logger_1.log.error('failed to parse message header', e, message);
+            //throw new Error('Failed to parse message');
+            //this.fsm.protocolError();
+            return;
+        }
+        logger_1.log.debug('message received: ', header.method);
+        logger_1.log.trace('message received: ', header);
+        let payload = null;
+        if (header.payload_size > 0) {
+            const payloadOffset = fieldMargin + magic.size + magic.headerSize;
+            const payloadSize = header.payload_size;
+            if (!header.hasOwnProperty('payload_type') || header.payload_type.indexOf('application/json') === 0) {
+                try {
+                    payload = getJsonObject(dataView.subarray(payloadOffset, payloadOffset + payloadSize));
+                }
+                catch (e) {
+                    logger_1.log.error('failed to parse message body', e, message);
+                    //this.fsm.protocolError();
+                    return;
+                }
+            }
+            else if (header.payload_type.indexOf('text/plain') === 0) {
+                payload = uint8ArrayToString(dataView.subarray(payloadOffset, payloadOffset + payloadSize));
+            }
+        }
+        return { method: header.method, header, payload };
+    }
+    static createPacket(header, payloadString = '') {
+        header.payload_size = byteLength(payloadString); // eslint-disable-line camelcase
+        let headerString = JSON.stringify(header) + '\r\n';
+        let magicString = 'TWILSOCK V3.0 ' + (byteLength(headerString) - 2) + '\r\n';
+        logger_1.log.debug('send request:', magicString + headerString + payloadString);
+        let message = stringToUint8Array(magicString + headerString + payloadString);
+        return message.buffer;
+    }
+}
+exports.Parser = Parser;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/protocol/messages/abstractmessage.js":
+/*!************************************************************************!*\
+  !*** ./node_modules/twilsock/lib/protocol/messages/abstractmessage.js ***!
+  \************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const uuid_1 = __webpack_require__(/*! uuid */ "./node_modules/uuid/index.js");
+class AbstractMessage {
+    constructor(id) {
+        this.id = id || `TM${uuid_1.v4()}`;
+    }
+}
+exports.AbstractMessage = AbstractMessage;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/protocol/messages/close.js":
+/*!**************************************************************!*\
+  !*** ./node_modules/twilsock/lib/protocol/messages/close.js ***!
+  \**************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const abstractmessage_1 = __webpack_require__(/*! ./abstractmessage */ "./node_modules/twilsock/lib/protocol/messages/abstractmessage.js");
+class Close extends abstractmessage_1.AbstractMessage {
+    constructor() {
+        super();
+        this.method = 'close';
+    }
+}
+exports.Close = Close;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/protocol/messages/index.js":
+/*!**************************************************************!*\
+  !*** ./node_modules/twilsock/lib/protocol/messages/index.js ***!
+  \**************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const init_1 = __webpack_require__(/*! ./init */ "./node_modules/twilsock/lib/protocol/messages/init.js");
+exports.Init = init_1.Init;
+const initReply_1 = __webpack_require__(/*! ./initReply */ "./node_modules/twilsock/lib/protocol/messages/initReply.js");
+exports.InitReply = initReply_1.InitReply;
+const update_1 = __webpack_require__(/*! ./update */ "./node_modules/twilsock/lib/protocol/messages/update.js");
+exports.Update = update_1.Update;
+const message_1 = __webpack_require__(/*! ./message */ "./node_modules/twilsock/lib/protocol/messages/message.js");
+exports.Message = message_1.Message;
+const reply_1 = __webpack_require__(/*! ./reply */ "./node_modules/twilsock/lib/protocol/messages/reply.js");
+exports.Reply = reply_1.Reply;
+const close_1 = __webpack_require__(/*! ./close */ "./node_modules/twilsock/lib/protocol/messages/close.js");
+exports.Close = close_1.Close;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/protocol/messages/init.js":
+/*!*************************************************************!*\
+  !*** ./node_modules/twilsock/lib/protocol/messages/init.js ***!
+  \*************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const abstractmessage_1 = __webpack_require__(/*! ./abstractmessage */ "./node_modules/twilsock/lib/protocol/messages/abstractmessage.js");
+class Init extends abstractmessage_1.AbstractMessage {
+    constructor(token, continuationToken, metadata, registrations = null, tweaks = null) {
+        super();
+        this.method = 'init';
+        this.token = token;
+        this.continuation_token = continuationToken;
+        this.metadata = metadata;
+        this.registrations = registrations;
+        this.tweaks = tweaks;
+        this.capabilities = ['client_update', 'offline_storage'];
+    }
+}
+exports.Init = Init;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/protocol/messages/initReply.js":
+/*!******************************************************************!*\
+  !*** ./node_modules/twilsock/lib/protocol/messages/initReply.js ***!
+  \******************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const abstractmessage_1 = __webpack_require__(/*! ./abstractmessage */ "./node_modules/twilsock/lib/protocol/messages/abstractmessage.js");
+class ContinuationTokenStatus {
+}
+exports.ContinuationTokenStatus = ContinuationTokenStatus;
+class InitReply extends abstractmessage_1.AbstractMessage {
+    constructor(id, continuationToken, continuationTokenStatus, offlineStorage, initRegistrations, debugInfo) {
+        super(id);
+        this.continuationToken = continuationToken;
+        this.continuationTokenStatus = continuationTokenStatus;
+        this.offlineStorage = offlineStorage;
+        this.initRegistrations = initRegistrations;
+        this.debugInfo = debugInfo;
+    }
+}
+exports.InitReply = InitReply;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/protocol/messages/message.js":
+/*!****************************************************************!*\
+  !*** ./node_modules/twilsock/lib/protocol/messages/message.js ***!
+  \****************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const abstractmessage_1 = __webpack_require__(/*! ./abstractmessage */ "./node_modules/twilsock/lib/protocol/messages/abstractmessage.js");
+class Message extends abstractmessage_1.AbstractMessage {
+    constructor(grant, contentType, request) {
+        super();
+        this.method = 'message';
+        this.active_grant = grant;
+        this.payload_type = contentType;
+        this.http_request = request;
+    }
+}
+exports.Message = Message;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/protocol/messages/reply.js":
+/*!**************************************************************!*\
+  !*** ./node_modules/twilsock/lib/protocol/messages/reply.js ***!
+  \**************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const abstractmessage_1 = __webpack_require__(/*! ./abstractmessage */ "./node_modules/twilsock/lib/protocol/messages/abstractmessage.js");
+class Reply extends abstractmessage_1.AbstractMessage {
+    constructor(id) {
+        super(id);
+        this.method = 'reply';
+        this.payload_type = 'application/json';
+        this.status = { code: 200, status: 'OK' };
+    }
+}
+exports.Reply = Reply;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/protocol/messages/update.js":
+/*!***************************************************************!*\
+  !*** ./node_modules/twilsock/lib/protocol/messages/update.js ***!
+  \***************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const abstractmessage_1 = __webpack_require__(/*! ./abstractmessage */ "./node_modules/twilsock/lib/protocol/messages/abstractmessage.js");
+class Update extends abstractmessage_1.AbstractMessage {
+    constructor(token) {
+        super();
+        this.method = 'update';
+        this.token = token;
+    }
+}
+exports.Update = Update;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/services/registrations.js":
+/*!*************************************************************!*\
+  !*** ./node_modules/twilsock/lib/services/registrations.js ***!
+  \*************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const logger_1 = __webpack_require__(/*! ../logger */ "./node_modules/twilsock/lib/logger.js");
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+const uuid_1 = __webpack_require__(/*! uuid */ "./node_modules/uuid/index.js");
+const twilsockerror_1 = __webpack_require__(/*! ../error/twilsockerror */ "./node_modules/twilsock/lib/error/twilsockerror.js");
+/**
+ * Registrations module handles all operations with registration contexts through twilsock
+ * Main role: it automatically refreshes all registrations after reconnect.
+ */
+class Registrations extends events_1.EventEmitter {
+    constructor(transport) {
+        super();
+        this.transport = transport;
+        this.registrations = new Map();
+        this.registrationsInProgress = new Map();
+    }
+    async putNotificationContext(contextId, context) {
+        const header = { method: 'put_notification_ctx', notification_ctx_id: contextId };
+        let reply = await this.transport.sendWithReply(header, context);
+    }
+    async deleteNotificationContext(contextId) {
+        let message = { method: 'delete_notification_ctx',
+            notification_ctx_id: contextId };
+        let reply = await this.transport.sendWithReply(message);
+    }
+    async updateRegistration(contextId, context) {
+        logger_1.log.debug('update registration for context', contextId);
+        let registrationAttempts = this.registrationsInProgress.get(contextId);
+        if (!registrationAttempts) {
+            registrationAttempts = new Set();
+            this.registrationsInProgress.set(contextId, registrationAttempts);
+        }
+        const attemptId = uuid_1.v4();
+        registrationAttempts.add(attemptId);
+        try {
+            await this.putNotificationContext(contextId, context);
+            logger_1.log.debug('registration attempt succeeded for context', context);
+            registrationAttempts.delete(attemptId);
+            if (registrationAttempts.size === 0) {
+                this.registrationsInProgress.delete(contextId);
+                this.emit('registered', contextId);
+            }
+        }
+        catch (err) {
+            logger_1.log.warn('registration attempt failed for context', context);
+            logger_1.log.debug(err);
+            registrationAttempts.delete(attemptId);
+            if (registrationAttempts.size === 0) {
+                this.registrationsInProgress.delete(contextId);
+                this.emit('registrationFailed', contextId, err);
+            }
+        }
+    }
+    updateRegistrations() {
+        logger_1.log.trace(`refreshing ${this.registrations.size} registrations`);
+        this.registrations.forEach((context, id) => {
+            this.updateRegistration(id, context);
+        });
+    }
+    setNotificationsContext(contextId, context) {
+        if (!contextId || !context) {
+            throw new twilsockerror_1.TwilsockError('Invalid arguments provided');
+        }
+        this.registrations.set(contextId, context);
+        if (this.transport.isConnected) {
+            this.updateRegistration(contextId, context);
+        }
+    }
+    async removeNotificationsContext(contextId) {
+        if (!this.registrations.has(contextId)) {
+            return;
+        }
+        await this.deleteNotificationContext(contextId);
+        if (this.transport.isConnected) {
+            this.registrations.delete(contextId);
+        }
+    }
+}
+exports.Registrations = Registrations;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/services/upstream.js":
+/*!********************************************************!*\
+  !*** ./node_modules/twilsock/lib/services/upstream.js ***!
+  \********************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const logger_1 = __webpack_require__(/*! ../logger */ "./node_modules/twilsock/lib/logger.js");
+const twilsockerror_1 = __webpack_require__(/*! ../error/twilsockerror */ "./node_modules/twilsock/lib/error/twilsockerror.js");
+const twilsockupstreamerror_1 = __webpack_require__(/*! ../error/twilsockupstreamerror */ "./node_modules/twilsock/lib/error/twilsockupstreamerror.js");
+const Messages = __webpack_require__(/*! ../protocol/messages */ "./node_modules/twilsock/lib/protocol/messages/index.js");
+const index_1 = __webpack_require__(/*! ../index */ "./node_modules/twilsock/lib/index.js");
+const REQUEST_TIMEOUT = 20000;
+function isHttpSuccess(code) {
+    return (code >= 200 && code < 300);
+}
+function isHttpReply(packet) {
+    return packet && packet.header && packet.header.http_status;
+}
+class Request {
+}
+function parseUri(uri) {
+    const match = uri.match(/^(https?\:)\/\/(([^:\/?#]*)(?:\:([0-9]+))?)(\/[^?#]*)(\?[^#]*|)(#.*|)$/);
+    if (match) {
+        let uriStruct = {
+            protocol: match[1],
+            host: match[2],
+            hostname: match[3],
+            port: match[4],
+            pathname: match[5],
+            search: match[6],
+            hash: match[7],
+            params: null
+        };
+        if (uriStruct.search.length > 0) {
+            let paramsString = uriStruct.search.substring(1);
+            uriStruct.params = paramsString.split('&')
+                .map(el => el.split('='))
+                .reduce((prev, curr) => {
+                if (!prev.hasOwnProperty(curr[0])) {
+                    prev[curr[0]] = curr[1];
+                }
+                else if (Array.isArray(prev[curr[0]])) {
+                    prev[curr[0]].push(curr[1]);
+                }
+                else {
+                    prev[curr[0]] = [prev[curr[0]], curr[1]];
+                }
+                return prev;
+            }, {});
+        }
+        return uriStruct;
+    }
+    throw new twilsockerror_1.TwilsockError('Incorrect URI: ' + uri);
+}
+function twilsockAddress(method, uri) {
+    const parsedUri = parseUri(uri);
+    let to = {
+        method: method,
+        host: parsedUri.host,
+        path: parsedUri.pathname
+    };
+    if (parsedUri.params) {
+        to.params = parsedUri.params;
+    }
+    return to;
+}
+function twilsockParams(method, uri, headers, body) {
+    return {
+        to: twilsockAddress(method, uri),
+        headers: headers,
+        body: body
+    };
+}
+class Upstream {
+    constructor(transport, twilsock, config) {
+        this.config = config;
+        this.transport = transport;
+        this.pendingMessages = [];
+        this.twilsock = twilsock;
+    }
+    saveMessage(message) {
+        return new Promise((resolve, reject) => {
+            let requestDescriptor = {
+                message,
+                resolve: resolve,
+                reject: reject,
+                alreadyRejected: false,
+                timeout: setTimeout(() => {
+                    logger_1.log.debug('request is timed out');
+                    reject(new twilsockerror_1.TwilsockError('Twilsock: request timeout'));
+                    requestDescriptor.alreadyRejected = true;
+                }, REQUEST_TIMEOUT)
+            };
+            this.pendingMessages.push(requestDescriptor);
+        });
+    }
+    sendPendingMessages() {
+        while (this.pendingMessages.length) {
+            let request = this.pendingMessages[0];
+            // Do not send message if we've rejected its promise already
+            if (!request.alreadyRejected) {
+                try {
+                    let message = request.message;
+                    this.actualSend(message)
+                        .then(response => request.resolve(response))
+                        .catch(e => request.reject(e));
+                    clearTimeout(request.timeout);
+                }
+                catch (e) {
+                    logger_1.log.debug('Failed to send pending message', e);
+                    break;
+                }
+            }
+            this.pendingMessages.splice(0, 1);
+        }
+    }
+    rejectPendingMessages() {
+        this.pendingMessages.forEach(message => {
+            message.reject(new index_1.TransportUnavailableError("Can't connect to twilsock"));
+            clearTimeout(message.timeout);
+        });
+        this.pendingMessages.splice(0, this.pendingMessages.length);
+    }
+    async actualSend(message) {
+        let address = message.to;
+        let headers = message.headers;
+        let body = message.body;
+        let httpRequest = {
+            host: address.host,
+            path: address.path,
+            method: address.method,
+            params: address.params,
+            headers: headers
+        };
+        let upstreamMessage = new Messages.Message(this.config.activeGrant, headers['Content-Type'] || 'application/json', httpRequest);
+        let reply = await this.transport.sendWithReply(upstreamMessage, body);
+        if (isHttpReply(reply) && !isHttpSuccess(reply.header.http_status.code)) {
+            throw new twilsockupstreamerror_1.TwilsockUpstreamError(reply.header.http_status.code, reply.header.http_status.status, reply.body);
+        }
+        return {
+            status: reply.header.http_status,
+            headers: reply.header.http_headers,
+            body: reply.body
+        };
+    }
+    /**
+     * Send an upstream message
+     * @param {Twilsock#Message} message Message structure with header, body and remote address
+     * @returns {Promise<Result>} Result from remote side
+     */
+    send(method, url, headers = {}, body) {
+        if (this.twilsock.isTerminalState) {
+            return Promise.reject(new index_1.TransportUnavailableError("Can't connect to twilsock"));
+        }
+        let twilsockMessage = twilsockParams(method, url, headers, body);
+        if (!this.twilsock.isConnected) {
+            return this.saveMessage(twilsockMessage);
+        }
+        return this.actualSend(twilsockMessage);
+    }
+}
+exports.Upstream = Upstream;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/tokenStorage.js":
+/*!***************************************************!*\
+  !*** ./node_modules/twilsock/lib/tokenStorage.js ***!
+  \***************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+/* WEBPACK VAR INJECTION */(function(global) {
+Object.defineProperty(exports, "__esModule", { value: true });
+class TokenStorage {
+    static get sessionStorage() {
+        try {
+            return global['sessionStorage'];
+        }
+        catch (err) {
+            return null;
+        }
+    }
+    static get window() {
+        try {
+            return global['window'];
+        }
+        catch (err) {
+            return null;
+        }
+    }
+    static storeToken(continuationToken, productId) {
+        if (TokenStorage.canStore) {
+            TokenStorage.sessionStorage.setItem(TokenStorage.getKeyName(productId), continuationToken);
+        }
+    }
+    static getStoredToken(productId) {
+        if (!TokenStorage.canStore) {
+            return null;
+        }
+        return TokenStorage.sessionStorage.getItem(TokenStorage.getKeyName(productId));
+    }
+    static initialize() {
+        if (TokenStorage.canStore) {
+            const flag = TokenStorage.sessionStorage.getItem(TokenStorage.initializedFlag);
+            // Duplicated tab, cleaning up all stored keys
+            if (flag) {
+                this.clear();
+            }
+            TokenStorage.sessionStorage.setItem(TokenStorage.initializedFlag, 'true');
+            // When leaving page or refreshing
+            TokenStorage.window.addEventListener('unload', () => {
+                TokenStorage.sessionStorage.removeItem(TokenStorage.initializedFlag);
+            });
+        }
+    }
+    static clear() {
+        if (TokenStorage.canStore) {
+            let keyToDelete = [];
+            for (let i = 0; i < TokenStorage.sessionStorage.length; i++) {
+                const key = TokenStorage.sessionStorage.key(i);
+                if (key.startsWith(TokenStorage.tokenStoragePrefix)) {
+                    keyToDelete.push(key);
+                }
+            }
+            keyToDelete.forEach(key => TokenStorage.sessionStorage.removeItem(key));
+            TokenStorage.sessionStorage.removeItem(TokenStorage.initializedFlag);
+        }
+    }
+    static getKeyName(productId) {
+        return `${TokenStorage.tokenStoragePrefix}${productId}`;
+    }
+    static get canStore() {
+        return TokenStorage.sessionStorage && TokenStorage.window;
+    }
+}
+TokenStorage.initializedFlag = 'twilio_twilsock_token_storage';
+TokenStorage.tokenStoragePrefix = 'twilio_continuation_token_';
+exports.TokenStorage = TokenStorage;
+TokenStorage.initialize();
+
+/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../webpack/buildin/global.js */ "./node_modules/webpack/buildin/global.js")))
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/twilsock.js":
+/*!***********************************************!*\
+  !*** ./node_modules/twilsock/lib/twilsock.js ***!
+  \***********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+const StateMachine = __webpack_require__(/*! javascript-state-machine */ "./node_modules/javascript-state-machine/lib/state-machine.js");
+const logger_1 = __webpack_require__(/*! ./logger */ "./node_modules/twilsock/lib/logger.js");
+const Messages = __webpack_require__(/*! ./protocol/messages */ "./node_modules/twilsock/lib/protocol/messages/index.js");
+const parser_1 = __webpack_require__(/*! ./parser */ "./node_modules/twilsock/lib/parser.js");
+const twilsockreplyerror_1 = __webpack_require__(/*! ./error/twilsockreplyerror */ "./node_modules/twilsock/lib/error/twilsockreplyerror.js");
+const backoffretrier_1 = __webpack_require__(/*! ./backoffretrier */ "./node_modules/twilsock/lib/backoffretrier.js");
+const DISCONNECTING_TIMEOUT = 3000;
+// Wraps asynchronous rescheduling
+// Just makes it simpler to find these hacks over the code
+function trampoline(f) {
+    setTimeout(f, 0);
+}
+/**
+ * Makes sure that body is properly stringified
+ */
+function preparePayload(payload) {
+    switch (typeof payload) {
+        case 'undefined':
+            return '';
+        case 'object':
+            return JSON.stringify(payload);
+        default:
+            return payload;
+    }
+}
+class Request {
+}
+class Response {
+}
+exports.Response = Response;
+/**
+ * Twilsock channel level protocol implementation
+ */
+class TwilsockChannel extends events_1.EventEmitter {
+    constructor(websocket, transport, config) {
+        super();
+        this.terminalStates = ['disconnected', 'rejected'];
+        this.lastEmittedState = undefined;
+        this.tokenExpiredSasCode = 20104;
+        this.websocket = websocket;
+        this.websocket.on('connected', () => this.fsm.socketConnected());
+        this.websocket.on('disconnected', (e) => this.fsm.socketClosed());
+        this.websocket.on('message', (message) => this.onIncomingMessage(message));
+        this.websocket.on('socketError', e => this.emit('connectionError', { terminal: false, message: e.message, httpStatusCode: null, errorCode: null }));
+        this.transport = transport;
+        this.config = config;
+        this.retrier = new backoffretrier_1.BackoffRetrier(config.retryPolicy);
+        this.retrier.on('attempt', () => this.retry());
+        this.retrier.on('failed', err => {
+            logger_1.log.warn(`Retrying failed: ${err.message}`);
+            this.disconnect();
+        });
+        if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
+            window.addEventListener('online', () => {
+                logger_1.log.debug('Browser reported connectivity state: online');
+                this.fsm.systemOnline();
+            });
+            window.addEventListener('offline', () => {
+                logger_1.log.debug('Browser reported connectivity state: offline');
+                this.websocket.close();
+                this.fsm.socketClosed();
+            });
+        }
+        this.fsm = new StateMachine({
+            init: 'disconnected',
+            transitions: [
+                { name: 'userConnect', from: ['disconnected', 'rejected'], to: 'connecting' },
+                { name: 'userConnect', from: ['connecting', 'connected'] },
+                { name: 'userDisconnect', from: ['connecting', 'initialising', 'connected', 'updating', 'retrying', 'rejected',
+                        'waitSocketClosed', 'waitOffloadSocketClosed'], to: 'disconnecting' },
+                { name: 'userRetry', from: ['retrying'], to: 'connecting' },
+                { name: 'socketConnected', from: ['connecting'], to: 'initialising' },
+                { name: 'socketClosed', from: ['connecting', 'initialising', 'connected', 'updating', 'error',
+                        'waitOffloadSocketClosed'], to: 'retrying' },
+                { name: 'socketClosed', from: ['disconnecting'], to: 'disconnected' },
+                { name: 'socketClosed', from: ['waitSocketClosed'], to: 'disconnected' },
+                { name: 'socketClosed', from: ['rejected'], to: 'rejected' },
+                { name: 'initSuccess', from: ['initialising'], to: 'connected' },
+                { name: 'initError', from: ['initialising'], to: 'error' },
+                { name: 'tokenRejected', from: ['initialising', 'updating'], to: 'rejected' },
+                { name: 'protocolError', from: ['initialising', 'connected', 'updating'], to: 'error' },
+                { name: 'receiveClose', from: ['initialising', 'connected', 'updating'], to: 'waitSocketClosed' },
+                { name: 'receiveOffload', from: ['initialising', 'connected', 'updating'], to: 'waitOffloadSocketClosed' },
+                { name: 'unsupportedProtocol', from: ['initialising', 'connected', 'updating'], to: 'unsupported' },
+                { name: 'receiveFatalClose', from: ['initialising', 'connected', 'updating'], to: 'unsupported' },
+                { name: 'userUpdateToken', from: ['disconnected', 'rejected', 'connecting', 'retrying'], to: 'connecting' },
+                { name: 'userUpdateToken', from: ['connected'], to: 'updating' },
+                { name: 'updateSuccess', from: ['updating'], to: 'connected' },
+                { name: 'updateError', from: ['updating'], to: 'error' },
+                { name: 'userSend', from: ['connected'], to: 'connected' },
+                { name: 'systemOnline', from: ['retrying'], to: 'connecting' }
+            ],
+            methods: {
+                onConnecting: () => {
+                    this.setupSocket();
+                    this.emit('connecting');
+                },
+                onEnterInitialising: () => {
+                    this.sendInit();
+                },
+                onLeaveInitialising: () => {
+                    this.cancelInit();
+                },
+                onEnterUpdating: () => {
+                    this.sendUpdate();
+                },
+                onLeaveUpdating: () => {
+                    this.cancelUpdate();
+                },
+                onEnterRetrying: () => {
+                    this.initRetry();
+                    this.emit('connecting');
+                },
+                onEnterConnected: () => {
+                    this.resetBackoff();
+                    this.onConnected();
+                },
+                onUserUpdateToken: () => {
+                    this.resetBackoff();
+                },
+                onTokenRejected: () => {
+                    this.resetBackoff();
+                    this.closeSocket(true);
+                    this.finalizeSocket();
+                },
+                onUserDisconnect: () => {
+                    this.closeSocket(true);
+                },
+                onEnterDisconnecting: () => {
+                    this.startDisconnectTimer();
+                },
+                onLeaveDisconnecting: () => {
+                    this.cancelDisconnectTimer();
+                },
+                onEnterWaitSocketClosed: () => {
+                    this.startDisconnectTimer();
+                },
+                onLeaveWaitSocketClosed: () => {
+                    this.cancelDisconnectTimer();
+                },
+                onEnterWaitOffloadSocketClosed: () => {
+                    this.startDisconnectTimer();
+                },
+                onLeaveWaitOffloadSocketClosed: () => {
+                    this.cancelDisconnectTimer();
+                },
+                onDisconnected: () => {
+                    this.resetBackoff();
+                    this.finalizeSocket();
+                },
+                onReceiveClose: (event, args) => {
+                    this.onCloseReceived(args);
+                },
+                onReceiveOffload: (event, args) => {
+                    logger_1.log.debug('onreceiveoffload: ', args);
+                    this.modifyBackoff(args.body);
+                    this.onCloseReceived(args.status);
+                },
+                onUnsupported: () => {
+                    this.closeSocket(true);
+                    this.finalizeSocket();
+                },
+                onError: (lifecycle, graceful) => {
+                    this.closeSocket(graceful);
+                    this.finalizeSocket();
+                },
+                onEnterState: event => {
+                    if (event.from !== 'none') {
+                        this.changeState(event);
+                    }
+                },
+                onInvalidTransition: (transition, from, to) => {
+                    logger_1.log.warn('FSM: unexpected transition', from, to);
+                }
+            }
+        });
+    }
+    changeState(event) {
+        logger_1.log.debug(`FSM: ${event.transition}: ${event.from} --> ${event.to}`);
+        if (this.lastEmittedState !== this.state) {
+            this.lastEmittedState = this.state;
+            this.emit('stateChanged', this.state);
+        }
+    }
+    resetBackoff() {
+        logger_1.log.trace('resetBackoff');
+        this.retrier.stop();
+    }
+    modifyBackoff(body) {
+        logger_1.log.trace('modifyBackoff', body);
+        let backoffPolicy = body ? body.backoff_policy : null;
+        if (backoffPolicy && typeof backoffPolicy.reconnect_min_ms === 'number') {
+            this.retrier.modifyBackoff(backoffPolicy.reconnect_min_ms);
+        }
+    }
+    startDisconnectTimer() {
+        logger_1.log.trace('startDisconnectTimer');
+        if (this.disconnectingTimer) {
+            clearTimeout(this.disconnectingTimer);
+            this.disconnectingTimer = null;
+        }
+        this.disconnectingTimer = setTimeout(() => {
+            logger_1.log.debug('disconnecting is timed out');
+            this.closeSocket(true);
+        }, DISCONNECTING_TIMEOUT);
+    }
+    cancelDisconnectTimer() {
+        logger_1.log.trace('cancelDisconnectTimer');
+        if (this.disconnectingTimer) {
+            clearTimeout(this.disconnectingTimer);
+            this.disconnectingTimer = null;
+        }
+    }
+    get isConnected() {
+        return this.state === 'connected' && this.websocket.isConnected;
+    }
+    get state() {
+        switch (this.fsm.state) {
+            case 'connecting':
+            case 'initialising':
+            case 'retrying':
+            case 'error':
+                return 'connecting';
+            case 'updating':
+            case 'connected':
+                return 'connected';
+            case 'rejected':
+                return 'rejected';
+            case 'disconnecting':
+            case 'waitSocketClosed':
+            case 'waitOffloadSocketClosed':
+                return 'disconnecting';
+            case 'disconnected':
+            default:
+                return 'disconnected';
+        }
+    }
+    initRetry() {
+        logger_1.log.debug('initRetry');
+        if (this.retrier.inProgress) {
+            this.retrier.attemptFailed();
+        }
+        else {
+            this.retrier.start();
+        }
+    }
+    retry() {
+        if (this.fsm.state != 'connecting') {
+            logger_1.log.trace('retry');
+            this.websocket.close();
+            this.fsm.userRetry();
+        }
+        else {
+            logger_1.log.trace('can\t retry as already connecting');
+        }
+    }
+    onConnected() {
+        this.emit('connected');
+    }
+    finalizeSocket() {
+        logger_1.log.trace('finalizeSocket');
+        this.websocket.close();
+        this.emit('disconnected');
+        if (this.disconnectedPromiseResolve) {
+            this.disconnectedPromiseResolve();
+            this.disconnectedPromiseResolve = null;
+        }
+    }
+    setupSocket() {
+        logger_1.log.trace('setupSocket:', this.config.token);
+        this.websocket.connect();
+    }
+    onIncomingMessage(message) {
+        let { method, header, payload } = parser_1.Parser.parse(message);
+        if (method !== 'reply') {
+            this.confirmReceiving(header);
+        }
+        if (method === 'notification') {
+            this.emit('message', header.message_type, payload);
+        }
+        else if (header.method === 'reply') {
+            this.transport.processReply({
+                id: header.id,
+                status: header.status,
+                header: header,
+                body: payload
+            });
+        }
+        else if (header.method === 'client_update') {
+            if (header.client_update_type === 'token_about_to_expire') {
+                this.emit('tokenAboutToExpire');
+            }
+        }
+        else if (header.method === 'close') {
+            if (header.status.code === 308) {
+                logger_1.log.debug('Connection has been offloaded');
+                this.fsm.receiveOffload({ status: header.status.status, body: payload });
+            }
+            else if (header.status.code === 406) { // Not acceptable message
+                const message = `Server closed connection because can't parse protocol: ${JSON.stringify(header.status)}`;
+                this.emitReplyConnectionError(message, header, true);
+                logger_1.log.error(message);
+                this.fsm.receiveFatalClose();
+            }
+            else if (header.status.code === 417) { // Protocol error
+                logger_1.log.error(`Server closed connection because can't parse client reply: ${JSON.stringify(header.status)}`);
+                this.fsm.receiveFatalClose(header.status.status);
+            }
+            else if (header.status.code === 410) { // Expired token
+                logger_1.log.warn(`Server closed connection: ${JSON.stringify(header.status)}`);
+                this.fsm.receiveClose(header.status.status);
+                this.emit('tokenExpired');
+            }
+            else if (header.status.code === 401) { // Authentication fail
+                logger_1.log.error(`Server closed connection: ${JSON.stringify(header.status)}`);
+                this.fsm.receiveClose(header.status.status);
+            }
+            else {
+                logger_1.log.warn('unexpected message: ', header.status);
+                // Try to reconnect
+                this.fsm.receiveOffload({ status: header.status.status, body: null });
+            }
+        }
+    }
+    async sendInit() {
+        logger_1.log.trace('sendInit');
+        try {
+            let reply = await this.transport.sendInit();
+            this.config.updateContinuationToken(reply.continuationToken);
+            this.fsm.initSuccess(reply);
+            this.emit('initialized', reply);
+            this.emit('tokenUpdated');
+        }
+        catch (ex) {
+            if (ex instanceof twilsockreplyerror_1.TwilsockReplyError) {
+                let isTerminalError = false;
+                logger_1.log.warn(`Init rejected by server: ${JSON.stringify(ex.reply.status)}`);
+                if (ex.reply.status.code === 401 || ex.reply.status.code === 403) {
+                    isTerminalError = true;
+                    this.fsm.tokenRejected(ex.reply.status);
+                    if (ex.reply.status.errorCode === this.tokenExpiredSasCode) {
+                        this.emit('tokenExpired');
+                    }
+                }
+                else if (ex.reply.status.code === 429) {
+                    this.modifyBackoff(ex.reply.body);
+                    this.fsm.initError(true);
+                }
+                else if (ex.reply.status.code === 500) {
+                    this.fsm.initError(false);
+                }
+                else {
+                    this.fsm.initError(true);
+                }
+                this.emitReplyConnectionError(ex.message, ex.reply, isTerminalError);
+            }
+            else {
+                this.emit('connectionError', { terminal: true, message: ex.message, httpStatusCode: null, errorCode: null });
+                this.fsm.initError(true);
+            }
+            this.emit('tokenUpdated', ex);
+        }
+    }
+    async sendUpdate() {
+        logger_1.log.trace('sendUpdate');
+        let message = new Messages.Update(this.config.token);
+        try {
+            let reply = await this.transport.sendWithReply(message);
+            this.fsm.updateSuccess(reply.body);
+            this.emit('tokenUpdated');
+        }
+        catch (ex) {
+            if (ex instanceof twilsockreplyerror_1.TwilsockReplyError) {
+                let isTerminalError = false;
+                logger_1.log.warn(`Token update rejected by server: ${JSON.stringify(ex.reply.status)}`);
+                if (ex.reply.status.code === 401 || ex.reply.status.code === 403) {
+                    isTerminalError = true;
+                    this.fsm.tokenRejected(ex.reply.status);
+                    if (ex.reply.status.errorCode === this.tokenExpiredSasCode) {
+                        this.emit('tokenExpired');
+                    }
+                }
+                else if (ex.reply.status.code === 429) {
+                    this.modifyBackoff(ex.reply.body);
+                    this.fsm.updateError(ex.reply.status);
+                }
+                else {
+                    this.fsm.updateError(ex.reply.status);
+                }
+                this.emitReplyConnectionError(ex.message, ex.reply, isTerminalError);
+            }
+            else {
+                this.emit('error', false, ex.message, null, null);
+                this.fsm.updateError(ex);
+            }
+            this.emit('tokenUpdated', ex);
+        }
+    }
+    emitReplyConnectionError(message, header, terminal) {
+        const description = header.status && header.status.description
+            ? header.status.description
+            : message;
+        const httpStatusCode = header.status.code;
+        const errorCode = header.status && header.status.errorCode
+            ? header.status.errorCode
+            : null;
+        this.emit('connectionError', { terminal: terminal, message: description, httpStatusCode: httpStatusCode, errorCode: errorCode });
+    }
+    cancelInit() {
+        logger_1.log.trace('cancelInit');
+        // TODO: implement
+    }
+    cancelUpdate() {
+        logger_1.log.trace('cancelUpdate');
+        // TODO: implement
+    }
+    /**
+     * Should be called for each message to confirm it received
+     */
+    confirmReceiving(messageHeader) {
+        logger_1.log.trace('confirmReceiving');
+        try {
+            this.transport.send(new Messages.Reply(messageHeader.id));
+        }
+        catch (e) {
+            logger_1.log.debug('failed to confirm packet receiving', e);
+        }
+    }
+    /**
+     * Shutdown connection
+     */
+    closeSocket(graceful) {
+        logger_1.log.trace(`closeSocket (graceful: ${graceful})`);
+        if (graceful && this.transport.isConnected) {
+            this.transport.sendClose();
+        }
+        this.websocket.close();
+        trampoline(() => this.fsm.socketClosed());
+    }
+    /**
+     * Initiate the twilsock connection
+     * If already connected, it does nothing
+     */
+    connect() {
+        logger_1.log.trace('connect');
+        this.fsm.userConnect();
+    }
+    /**
+     * Close twilsock connection
+     * If already disconnected, it does nothing
+     */
+    disconnect() {
+        logger_1.log.trace('disconnect');
+        if (this.fsm.is('disconnected')) {
+            return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+            this.disconnectedPromiseResolve = resolve;
+            this.fsm.userDisconnect();
+        });
+    }
+    /**
+     * Update fpa token for twilsock connection
+     */
+    updateToken(token) {
+        logger_1.log.trace('updateToken:', token);
+        return new Promise((resolve, reject) => {
+            this.once('tokenUpdated', e => {
+                if (e) {
+                    reject(e);
+                }
+                else {
+                    resolve();
+                }
+            });
+            this.fsm.userUpdateToken();
+        });
+    }
+    get isTerminalState() {
+        return this.terminalStates.indexOf(this.fsm.state) !== -1;
+    }
+    onCloseReceived(reason) {
+        this.websocket.close();
+    }
+}
+exports.TwilsockChannel = TwilsockChannel;
+exports.TwilsockImpl = TwilsockChannel;
+
+
+/***/ }),
+
+/***/ "./node_modules/twilsock/lib/websocketchannel.js":
+/*!*******************************************************!*\
+  !*** ./node_modules/twilsock/lib/websocketchannel.js ***!
+  \*******************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+/* WEBPACK VAR INJECTION */(function(global) {
+Object.defineProperty(exports, "__esModule", { value: true });
+const events_1 = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+const logger_1 = __webpack_require__(/*! ./logger */ "./node_modules/twilsock/lib/logger.js");
+class WebSocketChannel extends events_1.EventEmitter {
+    constructor(url) {
+        super();
+        this.url = url;
+        this.WebSocket = global['WebSocket'] || global['MozWebSocket'] || __webpack_require__(/*! ws */ 1);
+    }
+    get isConnected() {
+        return this.socket && this.socket.readyState === 1;
+    }
+    connect() {
+        logger_1.log.trace('connecting to socket');
+        let socket = new this.WebSocket(this.url);
+        socket.binaryType = 'arraybuffer';
+        socket.onopen = () => {
+            logger_1.log.debug(`socket opened ${this.url}`);
+            this.emit('connected');
+        };
+        socket.onclose = (e) => {
+            logger_1.log.debug('socket closed', e);
+            this.emit('disconnected', e);
+        };
+        socket.onerror = (e) => {
+            logger_1.log.debug('error:', e);
+            this.emit('socketError', e);
+        };
+        socket.onmessage = (message) => {
+            this.emit('message', message.data);
+        };
+        this.socket = socket;
+    }
+    send(message) {
+        this.socket.send(message);
+    }
+    close() {
+        logger_1.log.trace('closing socket');
+        if (this.socket) {
+            this.socket.onopen = null;
+            this.socket.onclose = null;
+            this.socket.onerror = null;
+            this.socket.onmessage = null;
+            try {
+                this.socket.close();
+            }
+            finally {
+            }
+        }
+    }
+}
+exports.WebSocketChannel = WebSocketChannel;
+
+/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../webpack/buildin/global.js */ "./node_modules/webpack/buildin/global.js")))
+
+/***/ }),
+
+/***/ "./node_modules/uuid/index.js":
+/*!************************************!*\
+  !*** ./node_modules/uuid/index.js ***!
+  \************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+var v1 = __webpack_require__(/*! ./v1 */ "./node_modules/uuid/v1.js");
+var v4 = __webpack_require__(/*! ./v4 */ "./node_modules/uuid/v4.js");
+
+var uuid = v4;
+uuid.v1 = v1;
+uuid.v4 = v4;
+
+module.exports = uuid;
+
+
+/***/ }),
+
+/***/ "./node_modules/uuid/lib/bytesToUuid.js":
+/*!**********************************************!*\
+  !*** ./node_modules/uuid/lib/bytesToUuid.js ***!
+  \**********************************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+/**
+ * Convert array of 16 byte values to UUID string format of the form:
+ * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+ */
+var byteToHex = [];
+for (var i = 0; i < 256; ++i) {
+  byteToHex[i] = (i + 0x100).toString(16).substr(1);
+}
+
+function bytesToUuid(buf, offset) {
+  var i = offset || 0;
+  var bth = byteToHex;
+  // join used to fix memory issue caused by concatenation: https://bugs.chromium.org/p/v8/issues/detail?id=3175#c4
+  return ([bth[buf[i++]], bth[buf[i++]], 
+	bth[buf[i++]], bth[buf[i++]], '-',
+	bth[buf[i++]], bth[buf[i++]], '-',
+	bth[buf[i++]], bth[buf[i++]], '-',
+	bth[buf[i++]], bth[buf[i++]], '-',
+	bth[buf[i++]], bth[buf[i++]],
+	bth[buf[i++]], bth[buf[i++]],
+	bth[buf[i++]], bth[buf[i++]]]).join('');
+}
+
+module.exports = bytesToUuid;
+
+
+/***/ }),
+
+/***/ "./node_modules/uuid/lib/rng-browser.js":
+/*!**********************************************!*\
+  !*** ./node_modules/uuid/lib/rng-browser.js ***!
+  \**********************************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+// Unique ID creation requires a high quality random # generator.  In the
+// browser this is a little complicated due to unknown quality of Math.random()
+// and inconsistent support for the `crypto` API.  We do the best we can via
+// feature-detection
+
+// getRandomValues needs to be invoked in a context where "this" is a Crypto
+// implementation. Also, find the complete implementation of crypto on IE11.
+var getRandomValues = (typeof(crypto) != 'undefined' && crypto.getRandomValues && crypto.getRandomValues.bind(crypto)) ||
+                      (typeof(msCrypto) != 'undefined' && typeof window.msCrypto.getRandomValues == 'function' && msCrypto.getRandomValues.bind(msCrypto));
+
+if (getRandomValues) {
+  // WHATWG crypto RNG - http://wiki.whatwg.org/wiki/Crypto
+  var rnds8 = new Uint8Array(16); // eslint-disable-line no-undef
+
+  module.exports = function whatwgRNG() {
+    getRandomValues(rnds8);
+    return rnds8;
+  };
+} else {
+  // Math.random()-based (RNG)
+  //
+  // If all else fails, use Math.random().  It's fast, but is of unspecified
+  // quality.
+  var rnds = new Array(16);
+
+  module.exports = function mathRNG() {
+    for (var i = 0, r; i < 16; i++) {
+      if ((i & 0x03) === 0) r = Math.random() * 0x100000000;
+      rnds[i] = r >>> ((i & 0x03) << 3) & 0xff;
+    }
+
+    return rnds;
+  };
+}
+
+
+/***/ }),
+
+/***/ "./node_modules/uuid/v1.js":
+/*!*********************************!*\
+  !*** ./node_modules/uuid/v1.js ***!
+  \*********************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+var rng = __webpack_require__(/*! ./lib/rng */ "./node_modules/uuid/lib/rng-browser.js");
+var bytesToUuid = __webpack_require__(/*! ./lib/bytesToUuid */ "./node_modules/uuid/lib/bytesToUuid.js");
+
+// **`v1()` - Generate time-based UUID**
+//
+// Inspired by https://github.com/LiosK/UUID.js
+// and http://docs.python.org/library/uuid.html
+
+var _nodeId;
+var _clockseq;
+
+// Previous uuid creation time
+var _lastMSecs = 0;
+var _lastNSecs = 0;
+
+// See https://github.com/broofa/node-uuid for API details
+function v1(options, buf, offset) {
+  var i = buf && offset || 0;
+  var b = buf || [];
+
+  options = options || {};
+  var node = options.node || _nodeId;
+  var clockseq = options.clockseq !== undefined ? options.clockseq : _clockseq;
+
+  // node and clockseq need to be initialized to random values if they're not
+  // specified.  We do this lazily to minimize issues related to insufficient
+  // system entropy.  See #189
+  if (node == null || clockseq == null) {
+    var seedBytes = rng();
+    if (node == null) {
+      // Per 4.5, create and 48-bit node id, (47 random bits + multicast bit = 1)
+      node = _nodeId = [
+        seedBytes[0] | 0x01,
+        seedBytes[1], seedBytes[2], seedBytes[3], seedBytes[4], seedBytes[5]
+      ];
+    }
+    if (clockseq == null) {
+      // Per 4.2.2, randomize (14 bit) clockseq
+      clockseq = _clockseq = (seedBytes[6] << 8 | seedBytes[7]) & 0x3fff;
+    }
+  }
+
+  // UUID timestamps are 100 nano-second units since the Gregorian epoch,
+  // (1582-10-15 00:00).  JSNumbers aren't precise enough for this, so
+  // time is handled internally as 'msecs' (integer milliseconds) and 'nsecs'
+  // (100-nanoseconds offset from msecs) since unix epoch, 1970-01-01 00:00.
+  var msecs = options.msecs !== undefined ? options.msecs : new Date().getTime();
+
+  // Per 4.2.1.2, use count of uuid's generated during the current clock
+  // cycle to simulate higher resolution clock
+  var nsecs = options.nsecs !== undefined ? options.nsecs : _lastNSecs + 1;
+
+  // Time since last uuid creation (in msecs)
+  var dt = (msecs - _lastMSecs) + (nsecs - _lastNSecs)/10000;
+
+  // Per 4.2.1.2, Bump clockseq on clock regression
+  if (dt < 0 && options.clockseq === undefined) {
+    clockseq = clockseq + 1 & 0x3fff;
+  }
+
+  // Reset nsecs if clock regresses (new clockseq) or we've moved onto a new
+  // time interval
+  if ((dt < 0 || msecs > _lastMSecs) && options.nsecs === undefined) {
+    nsecs = 0;
+  }
+
+  // Per 4.2.1.2 Throw error if too many uuids are requested
+  if (nsecs >= 10000) {
+    throw new Error('uuid.v1(): Can\'t create more than 10M uuids/sec');
+  }
+
+  _lastMSecs = msecs;
+  _lastNSecs = nsecs;
+  _clockseq = clockseq;
+
+  // Per 4.1.4 - Convert from unix epoch to Gregorian epoch
+  msecs += 12219292800000;
+
+  // `time_low`
+  var tl = ((msecs & 0xfffffff) * 10000 + nsecs) % 0x100000000;
+  b[i++] = tl >>> 24 & 0xff;
+  b[i++] = tl >>> 16 & 0xff;
+  b[i++] = tl >>> 8 & 0xff;
+  b[i++] = tl & 0xff;
+
+  // `time_mid`
+  var tmh = (msecs / 0x100000000 * 10000) & 0xfffffff;
+  b[i++] = tmh >>> 8 & 0xff;
+  b[i++] = tmh & 0xff;
+
+  // `time_high_and_version`
+  b[i++] = tmh >>> 24 & 0xf | 0x10; // include version
+  b[i++] = tmh >>> 16 & 0xff;
+
+  // `clock_seq_hi_and_reserved` (Per 4.2.2 - include variant)
+  b[i++] = clockseq >>> 8 | 0x80;
+
+  // `clock_seq_low`
+  b[i++] = clockseq & 0xff;
+
+  // `node`
+  for (var n = 0; n < 6; ++n) {
+    b[i + n] = node[n];
+  }
+
+  return buf ? buf : bytesToUuid(b);
+}
+
+module.exports = v1;
+
+
+/***/ }),
+
+/***/ "./node_modules/uuid/v4.js":
+/*!*********************************!*\
+  !*** ./node_modules/uuid/v4.js ***!
+  \*********************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+var rng = __webpack_require__(/*! ./lib/rng */ "./node_modules/uuid/lib/rng-browser.js");
+var bytesToUuid = __webpack_require__(/*! ./lib/bytesToUuid */ "./node_modules/uuid/lib/bytesToUuid.js");
+
+function v4(options, buf, offset) {
+  var i = buf && offset || 0;
+
+  if (typeof(options) == 'string') {
+    buf = options === 'binary' ? new Array(16) : null;
+    options = null;
+  }
+  options = options || {};
+
+  var rnds = options.random || (options.rng || rng)();
+
+  // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
+  rnds[6] = (rnds[6] & 0x0f) | 0x40;
+  rnds[8] = (rnds[8] & 0x3f) | 0x80;
+
+  // Copy bytes to buffer, if provided
+  if (buf) {
+    for (var ii = 0; ii < 16; ++ii) {
+      buf[i + ii] = rnds[ii];
+    }
+  }
+
+  return buf || bytesToUuid(rnds);
+}
+
+module.exports = v4;
+
+
+/***/ }),
+
 /***/ "./node_modules/webpack/buildin/global.js":
 /*!***********************************!*\
   !*** (webpack)/buildin/global.js ***!
@@ -51195,13 +62268,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _Combatant__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Combatant */ "./resources/js/components/Combatant.js");
 /* harmony import */ var _Moves__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./Moves */ "./resources/js/components/Moves.js");
 /* harmony import */ var _Feedback__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./Feedback */ "./resources/js/components/Feedback.js");
+/* harmony import */ var twilio_sync_lib_client__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! twilio-sync/lib/client */ "./node_modules/twilio-sync/lib/client.js");
+/* harmony import */ var twilio_sync_lib_client__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(twilio_sync_lib_client__WEBPACK_IMPORTED_MODULE_4__);
 function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
-
-function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); if (enumerableOnly) symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; }); keys.push.apply(keys, symbols); } return keys; }
-
-function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i] != null ? arguments[i] : {}; if (i % 2) { ownKeys(Object(source), true).forEach(function (key) { _defineProperty(target, key, source[key]); }); } else if (Object.getOwnPropertyDescriptors) { Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)); } else { ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } } return target; }
-
-function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -51224,6 +62293,7 @@ function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || func
 
 
 
+
 var Combat =
 /*#__PURE__*/
 function (_Component) {
@@ -51238,7 +62308,7 @@ function (_Component) {
     _this.state = {
       data: {}
     };
-    _this.handleClick = _this.handleClick.bind(_assertThisInitialized(_this));
+    _this.handleDocumentLoad = _this.handleDocumentLoad.bind(_assertThisInitialized(_this));
     return _this;
   }
 
@@ -51247,33 +62317,39 @@ function (_Component) {
     value: function componentDidMount() {
       var _this2 = this;
 
-      fetch('/combat/100').then(function (response) {
+      // replace http request with getting initial state from sync
+      // bind event handler to sync update event so it updates React's state
+      fetch('/token').then(function (response) {
         return response.json();
       }).then(function (json) {
-        _this2.setState({
-          data: json
+        // json = tokenData in object
+        var syncClient = new twilio_sync_lib_client__WEBPACK_IMPORTED_MODULE_4___default.a(json.token, {
+          logLevel: 'info'
+        });
+        syncClient.on('connectionStateChanged', function (state, syncClient) {
+          if (state !== 'connected') {
+            console.log('Sync is not live (websocket connection ' + state);
+          } else {
+            console.log('Sync is connected');
+          }
+        });
+        syncClient.document('CHATEMON_FIGHT').then(function (syncDoc) {
+          _this2.handleDocumentLoad(syncDoc);
+
+          syncDoc.on('updated', function (event) {
+            console.debug("Game was updated", event.isLocal ? "locally." : "by the other guy.");
+
+            _this2.handleDocumentLoad(syncDoc);
+          });
         });
       });
     }
   }, {
-    key: "handleClick",
-    value: function handleClick(index, e) {
-      var _this3 = this;
-
-      // https://www.freecodecamp.org/news/handling-state-in-react-four-immutable-approaches-to-consider-d1f5c00249d5/
-      this.setState(function (state) {
-        return _objectSpread({}, state, {
-          data: _objectSpread({}, _this3.state.data, {
-            feedback: null
-          })
-        });
-      });
-      fetch('/combat/100/move/' + index).then(function (response) {
-        return response.json();
-      }).then(function (json) {
-        _this3.setState({
-          data: json
-        });
+    key: "handleDocumentLoad",
+    value: function handleDocumentLoad(syncDoc) {
+      var data = syncDoc.value;
+      this.setState({
+        data: data
       });
     }
   }, {
@@ -51286,12 +62362,14 @@ function (_Component) {
           className: "column"
         }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(_Combatant__WEBPACK_IMPORTED_MODULE_1__["default"], {
           combatant: this.state.data.combatantOne,
-          color: "warning"
+          color: "warning",
+          icon: "code"
         })), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
           className: "column"
         }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(_Combatant__WEBPACK_IMPORTED_MODULE_1__["default"], {
           combatant: this.state.data.combatantTwo,
-          color: "danger"
+          color: "danger",
+          icon: "bug"
         }))), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("hr", null), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
           className: "columns"
         }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
@@ -51299,15 +62377,14 @@ function (_Component) {
         }), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
           className: "column is-three-fifths"
         }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(_Moves__WEBPACK_IMPORTED_MODULE_2__["default"], {
-          moves: this.state.data.combatantOne.moves,
-          handleClick: this.handleClick
+          moves: this.state.data.combatantOne.moves
         })), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
           className: "column"
-        })), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+        })), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("hr", null), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
           className: "columns"
         }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
           className: "column"
-        }, this.state.data.feedback && react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(_Feedback__WEBPACK_IMPORTED_MODULE_3__["default"], {
+        }, this.state.data.feedback.length > 0 && react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(_Feedback__WEBPACK_IMPORTED_MODULE_3__["default"], {
           feedback: this.state.data.feedback
         }))));
       } else {
@@ -51376,22 +62453,26 @@ function (_Component) {
       }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
         className: "columns"
       }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
-        className: "column"
+        className: "column is-1"
+      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("i", {
+        className: 'fas fa-3x fa-' + this.props.icon
+      })), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+        className: "row columns column"
       }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
-        className: "container is-fluid has-text-left"
+        className: "column has-text-left is-6"
       }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h3", {
         className: "title"
-      }, this.props.combatant.name))), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
-        className: "column"
-      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
-        className: "container is-fluid has-text-right"
+      }, this.props.combatant.name)), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+        className: "column has-text-right is-6"
       }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h3", {
         className: "title"
-      }, "Lv. ", this.props.combatant.level)))), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("progress", {
+      }, "Lv. ", this.props.combatant.level)), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+        className: "column is-12"
+      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("progress", {
         className: "progress is-large",
         value: this.props.combatant.health,
         max: this.props.combatant.maxHealth
-      })));
+      }))))));
     }
   }]);
 
@@ -51449,11 +62530,14 @@ function (_Component) {
     key: "render",
     value: function render() {
       return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
-        className: "notification has-text-centered"
+        className: "notification has-text-centered is-size-1"
       }, this.props.feedback.map(function (feedback, index) {
         return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h3", {
-          key: index
-        }, feedback);
+          key: index,
+          dangerouslySetInnerHTML: {
+            __html: feedback
+          }
+        });
       }));
     }
   }]);
@@ -51518,7 +62602,17 @@ function (_Component) {
     value: function render() {
       return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
         className: "container is-fluid"
-      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(_Combat__WEBPACK_IMPORTED_MODULE_2__["default"], null));
+      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+        className: "notification is-success is-size-1 is-full-width columns"
+      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+        className: "column is-two-fifths"
+      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("p", null, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("strong", null, "Chatemon")), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("p", null, "Gotta Chat Em All")), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+        className: "column is-1"
+      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("i", {
+        className: "fas fa-3x fa-mobile-alt"
+      })), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+        className: "column"
+      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("p", null, "Send an SMS to: ", react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("strong", null, "+44 7723 501858")), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("p", null, " with the move you wish to play (A, B or C)"))), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(_Combat__WEBPACK_IMPORTED_MODULE_2__["default"], null));
     }
   }]);
 
@@ -51579,15 +62673,10 @@ function (_Component) {
   _createClass(Moves, [{
     key: "render",
     value: function render() {
-      var _this = this;
-
       var buttons = this.props.moves.map(function (move, index) {
-        return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("button", {
+        return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
           key: index,
-          className: "button is-fullwidth is-large is-info",
-          onClick: function onClick(e) {
-            return _this.props.handleClick(index, e);
-          }
+          className: "button is-fullwidth is-large is-info"
         }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h1", {
           className: "column is-one-fifth"
         }, (index + 10).toString(36).toUpperCase()), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h1", {
@@ -51630,6 +62719,17 @@ function (_Component) {
 __webpack_require__(/*! /Users/ghockin/www/chatemon-laravel/resources/js/app.js */"./resources/js/app.js");
 module.exports = __webpack_require__(/*! /Users/ghockin/www/chatemon-laravel/resources/sass/app.scss */"./resources/sass/app.scss");
 
+
+/***/ }),
+
+/***/ 1:
+/*!********************!*\
+  !*** ws (ignored) ***!
+  \********************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+/* (ignored) */
 
 /***/ })
 

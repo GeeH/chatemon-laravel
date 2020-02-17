@@ -11,7 +11,7 @@ final class CombatantFactory
     /**
      * @throws PropertyDoesNotExistException
      */
-    public static function create(array $data): Combatant
+    public static function fromArray(array $data): Combatant
     {
         $combatant = new Combatant();
 
@@ -40,8 +40,21 @@ final class CombatantFactory
             $move->accuracy = 50;
             $move->damage = 30;
             $combatant->moves[] = $move;
+
+            return $combatant;
         }
 
+
+        $moveObjects = [];
+        foreach($data['moves'] as $moveData) {
+            $move = new Move();
+            $move->name = $moveData['name'];
+            $move->accuracy = $moveData['accuracy'];
+            $move->damage = $moveData['damage'];
+            $moveObjects[] = $move;
+        }
+
+        $combatant->moves = $moveObjects;
         return $combatant;
     }
 }

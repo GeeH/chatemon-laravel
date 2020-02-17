@@ -42,7 +42,7 @@ final class Combat
      * @throws CombatAlreadyWonException
      * @throws MoveDoesNotExistException
      */
-    public function takeTurn(int $oneMoveIndex, int $twoMoveIndex): array
+    public function takeTurn(int $oneMoveIndex, int $twoMoveIndex): void
     {
         $this->feedback = [];
 
@@ -64,7 +64,6 @@ final class Combat
         // @todo Messsy - refactor
         $moveIndex = lcfirst($combatantGoingFirst . 'MoveIndex');
         if (!$this->attackDefender($attacker, $defender, $$moveIndex)) {
-
             $attacker = $this->{'combatant' . ($combatantGoingFirst === 'One' ? 'Two' : 'One')};
             $defender = $this->{'combatant' . ($combatantGoingFirst === 'One' ? 'One' : 'Two')};
             $moveIndex = ($moveIndex === 'oneMoveIndex' ? 'twoMoveIndex' : 'oneMoveIndex');
@@ -72,8 +71,6 @@ final class Combat
         }
 
         $this->combatState->incrementTurnCount();
-
-        return $this->feedback;
     }
 
     public function attackDefender(Combatant $attacker, Combatant $defender, $moveIndex): bool
@@ -87,13 +84,13 @@ final class Combat
         // roll a D100 dice
         $chanceToHit = $this->randomizer->__invoke(1, 100);
         if ($chanceToHit > $move->accuracy) {
-            $this->feedback[] = "{$attacker->name} attacked {$defender->name} but they missed";
+            $this->feedback[] = "{$attacker->name} attacked {$defender->name} with <strong>{$move->name}</strong> but they missed";
             // we missed, do nothing
             $this->logger->info('Missed attack');
             return false;
         }
 
-        $this->feedback[] = "{$attacker->name} attacked {$defender->name} it was effective";
+        $this->feedback[] = "{$attacker->name} attacked {$defender->name} with <strong>{$move->name}</strong> it was effective";
         $damage = $this->calculateDamage($attacker->level, $attacker->attack, $move->damage, $defender->defence);
 
         $this->logger->info('Damage is ' . $damage);
@@ -103,6 +100,7 @@ final class Combat
 
         if ($defender->health < 1) {
             $this->combatState->markWon();
+            $this->feedback[] = "<strong>{$defender->name} has fainted!</strong>";
             return true;
         }
 
@@ -183,8 +181,9 @@ final class Combat
                 'combatantOne' => (array)$this->getCombatantOne(),
                 'combatantTwo' => (array)$this->getCombatantTwo(),
                 'id' => $this->getId(),
+                'feedback' => $this->feedback,
             ],
-            $this->combatState->toArray()
+            $this->combatState->toArray(),
         );
 
         $return['combatantOne']['moves'] = [];

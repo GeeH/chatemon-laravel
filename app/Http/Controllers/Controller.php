@@ -9,28 +9,51 @@ use Chatemon\Randomizer;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
+use Illuminate\Log\Logger;
 use Illuminate\Routing\Controller as BaseController;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
 use Twilio\Rest\Client;
+use Twilio\Rest\Sync\V1\Service\DocumentInstance;
 
 abstract class Controller extends BaseController
 {
     use AuthorizesRequests, DispatchesJobs, ValidatesRequests;
 
-    public function makeCombat(LoggerInterface $logger): Combat
+    private Client $client;
+
+    public function __construct()
     {
+        $twilioAccountSid = getenv('TWILIO_SID');
+        $twilioAccountToken = getenv('TWILIO_ACCOUNT_TOKEN');
+        $this->client = new Client($twilioAccountSid, $twilioAccountToken);
+    }
+
+    protected function makeCombat(LoggerInterface $logger): Combat
+    {
+        $enemyNames = [
+            'Off By One' => 30,
+            'Divide By Zero' => 10,
+            'Syntax Error' => 23,
+            'Invalid Argument' => 5,
+            'Unexpected Paamayim Nekudotayim' => 100,
+            'Race Condition' => 18,
+        ];
+
+        $enemyName = array_rand($enemyNames);
+        $enemyLevel = $enemyNames[$enemyName];
+
         return new Combat(
-            CombatantFactory::create(
+            CombatantFactory::fromArray(
                 [
-                    'name' => 'Developer', 'level' => 13, 'attack' => 142, 'defence' => 20,
+                    'name' => 'Developer', 'level' => 15, 'attack' => 150, 'defence' => 20,
                     'health' => 50, 'maxHealth' => 50, 'moves' => [],
                     'speed' => 5,
                     'id' => Uuid::uuid4()->toString()
                 ]
             ),
-            CombatantFactory::create(
-                ['name' => 'HR Executive', 'level' => 21, 'attack' => 130, 'defence' => 23,
+            CombatantFactory::fromArray(
+                ['name' => $enemyName, 'level' => $enemyLevel, 'attack' => 130, 'defence' => 23,
                     'health' => 47, 'maxHealth' => 47, 'moves' => [],
                     'speed' => 1,
                     'id' => Uuid::uuid4()->toString()]
@@ -41,25 +64,39 @@ abstract class Controller extends BaseController
         );
     }
 
-    public function getCombat(LoggerInterface $logger): Combat
+    protected function getCombat(LoggerInterface $logger): Combat
     {
-        $accountId = getenv('TWILIO_SID');
-        $authToken = getenv('TWILIO_ACCOUNT_TOKEN');
-        $syncSid = getenv('TWILIO_SYNC_SID');
-
-        $client = new Client($accountId, $authToken);
-        $document = $client->sync->v1->services($syncSid)
-            ->documents
-            ->read()[0];
-
+        $document = $this->getCombatDocument();
+        // $data is an array
         $data = $document->data;
 
         return new Combat(
-            CombatantFactory::create($data['combatantOne']),
-            CombatantFactory::create($data['combatantTwo']),
+            CombatantFactory::fromArray($data['combatantOne']),
+            CombatantFactory::fromArray($data['combatantTwo']),
             CombatState::fromArray(['turns' => $data['turns'], 'winner' => $data['winner']]),
             new Randomizer(),
             $logger
         );
+    }
+
+    protected function saveCombat(Combat $combat): void
+    {
+        $document = $this->getCombatDocument();
+        $document->update([
+            'data' => $combat->toArray(),
+        ]);
+    }
+
+    protected function startNewCombat(LoggerInterface $logger): void
+    {
+        $this->saveCombat($this->makeCombat($logger));
+    }
+
+    protected function getCombatDocument(): DocumentInstance
+    {
+        $syncSid = getenv('TWILIO_SYNC_SID');
+        return $this->client->sync->v1->services($syncSid)
+            ->documents
+            ->read()[0];
     }
 }
