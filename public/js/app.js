@@ -62607,8 +62607,11 @@ function (_Component) {
       }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
         className: "notification is-success is-size-1 is-full-width columns"
       }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
-        className: "column is-two-fifths"
-      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("p", null, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("strong", null, "Chatemon")), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("p", null, "Gotta Chat Em All")), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
+        className: "column is-one-fifth"
+      }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("p", null, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("strong", null, "Chatemon"), " ", react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("small", null, "by")), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("img", {
+        src: "img/twilio-logo-red.png",
+        width: "200"
+      })), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
         className: "column is-1"
       }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("i", {
         className: "fas fa-3x fa-mobile-alt"
@@ -62685,7 +62688,7 @@ function (_Component) {
           className: "column"
         }, react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("strong", null, move.name)), react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("h5", {
           className: "column is-one-fifth"
-        }, move.accuracy, "% - ", move.damage));
+        }, move.accuracy, "%acc - ", move.damage, "pwr"));
       });
       return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement("div", {
         className: "buttons is-fullwidth"

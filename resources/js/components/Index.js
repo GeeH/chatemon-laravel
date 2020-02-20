@@ -7,9 +7,9 @@ export default class Index extends Component {
         return (
             <div className="container is-fluid">
                 <div className="notification is-success is-size-1 is-full-width columns">
-                    <div className="column is-two-fifths">
-                        <p><strong>Chatemon</strong></p>
-                        <p>Gotta Chat Em All</p>
+                    <div className="column is-one-fifth">
+                        <p><strong>Chatemon</strong> <small>by</small></p>
+                        <img src="img/twilio-logo-red.png" width="200"/>
                     </div>
                     <div className="column is-1">
                         <i className="fas fa-3x fa-mobile-alt"/>
