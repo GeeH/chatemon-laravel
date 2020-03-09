@@ -20,13 +20,11 @@ abstract class Controller extends BaseController
 {
     use AuthorizesRequests, DispatchesJobs, ValidatesRequests;
 
-    private Client $client;
+    protected Client $client;
 
-    public function __construct()
+    public function __construct(Client $client)
     {
-        $twilioAccountSid = getenv('TWILIO_SID');
-        $twilioAccountToken = getenv('TWILIO_ACCOUNT_TOKEN');
-        $this->client = new Client($twilioAccountSid, $twilioAccountToken);
+        $this->client = $client;
     }
 
     protected function makeCombat(LoggerInterface $logger): Combat
@@ -67,8 +65,8 @@ abstract class Controller extends BaseController
     protected function getCombat(LoggerInterface $logger): Combat
     {
         $document = $this->getCombatDocument();
-        // $data is an array
         $data = $document->data;
+        // $data is an array
 
         return new Combat(
             CombatantFactory::fromArray($data['combatantOne']),

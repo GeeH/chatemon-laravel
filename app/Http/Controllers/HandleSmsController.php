@@ -24,7 +24,6 @@ class HandleSmsController extends Controller
         }
 
         $combat = $this->getCombat($logger);
-//        $this->saveCombat($combat);
 
         try {
             $moveIndex = ucfirst($request->post('Body'));
@@ -33,6 +32,7 @@ class HandleSmsController extends Controller
 
             // @todo Hacky nonsense, make this go away when we create bespoke opponents
             $combat->takeTurn($this->moveIndex[$moveIndex], 0);
+
             $this->saveCombat($combat, $fromCountry, $fromNumber);
             $messageResponse->message("Thanks, You've played move {$moveIndex}");
             return (string)$messageResponse;
