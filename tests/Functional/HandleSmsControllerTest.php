@@ -6,6 +6,7 @@ use App\Http\Controllers\HandleSmsController;
 use Illuminate\Http\Request;
 use Illuminate\Log\Logger;
 use Mockery;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Twilio\Rest\Client;
 
@@ -14,10 +15,9 @@ class HandleSmsControllerTest extends TestCase
     /** @var Mockery\Mock|Request */
     private $request;
 
-    /** @var Logger */
-    private $logger;
+    private Logger $logger;
 
-    /** @var \PHPUnit\Framework\MockObject\MockObject|Client */
+    /** @var MockObject|Client */
     private $client;
 
     private HandleSmsController $controller;
@@ -32,6 +32,7 @@ class HandleSmsControllerTest extends TestCase
 
         $twilioAccountSid = getenv('TWILIO_SID');
         $twilioAccountToken = getenv('TWILIO_ACCOUNT_TOKEN');
+
         $this->client = new Client($twilioAccountSid, $twilioAccountToken);
 
         $this->controller = new HandleSmsController($this->client);
