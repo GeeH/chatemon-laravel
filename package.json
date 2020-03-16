@@ -22,6 +22,7 @@
         "sass-loader": "^7.1.0"
     },
     "dependencies": {
+        "serverless": "^1.66.0",
         "twilio-sync": "^0.12.0"
     }
 }

@@ -33,7 +33,7 @@ class HandleSmsControllerTest extends TestCase
         $twilioAccountSid = getenv('TWILIO_SID');
         $twilioAccountToken = getenv('TWILIO_ACCOUNT_TOKEN');
 
-        $this->client = new Client($twilioAccountSid, $twilioAccountToken);
+            $this->client = new Client($twilioAccountSid, $twilioAccountToken);
 
         $this->controller = new HandleSmsController($this->client);
     }

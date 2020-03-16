@@ -1,0 +1,28 @@
+service: chatemon-live
+
+provider:
+  name: aws
+  region: eu-west-1
+  runtime: provided
+  environment:
+    # Laravel environment variables
+    APP_STORAGE: '/tmp'
+
+plugins:
+  - ./vendor/bref/bref
+
+functions:
+  website:
+    handler: public/index.php
+    timeout: 28 # in seconds (API Gateway has a timeout of 29 seconds)
+    layers:
+      - ${bref:layer.php-74-fpm}
+    events:
+      -   http: 'ANY /'
+      -   http: 'ANY /{proxy+}'
+  artisan:
+    handler: artisan
+    timeout: 120 # in seconds
+    layers:
+      - ${bref:layer.php-74} # PHP
+      - ${bref:layer.console} # The "console" layer
