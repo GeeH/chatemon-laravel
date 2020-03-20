@@ -11,6 +11,6 @@ php:
 	sls deploy
 
 test:
-	vendor/bin/phpunit --testdox
+	vendor/bin/phpunit --testdox --testsuite Chatemon
 
 deploy: test php static
