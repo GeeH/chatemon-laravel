@@ -23,15 +23,18 @@
   - PSR4 Autoloading deprecation notice on CI
  
   - Deployment Stuff
-   - Add assets folder as a config/env value
-   - Automate deployments from scratch
+   - Add assets folder as a config/env value [X]
+   - Automate deployments from scratch [X]
    - PHP
-     - Checkout blank version of branch
-     - Composer install
-     - sls deploy
+     - Checkout blank version of branch [X]
+     - Composer install [X]
+     - sls deploy [X]
    - Static
-    - Checkout blank version of branch
-    - npm install
-    - npm build (or whatever correct command is)
-    - aws s3 sync command
-   - Run e2e test?
+    - Checkout blank version of branch [X]
+    - npm install [X]
+    - npm build (or whatever correct command is) [X]
+    - aws s3 sync command [X]
+ 
+ MONDAY 23rd MARCH
+  - FIX Github action deploys - it doesn't appear to be reading the serverless.yml file properly
+  [20-Mar-2020 15:42:59] WARNING: [pool default] child 10 said into stderr: "NOTICE: PHP message: PHP Fatal error:  Uncaught InvalidArgumentException: Please provide a valid cache path. in /var/task/vendor/laravel/framework/src/Illuminate/View/Compilers/Compiler.php:36"
