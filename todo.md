@@ -20,7 +20,7 @@
     - WhatsApp []
     - Anything else? []
  
- 
+  - PSR4 Autoloading deprecation notice on CI
  
   - Deployment Stuff
    - Add assets folder as a config/env value

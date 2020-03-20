@@ -17,12 +17,13 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
+  
+    - name: Output PHP version and information
+      run: php --ini
+
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
     - uses: php-actions/composer@v1
-
-    - name: Output PHP Version
-      run: php --version
 
     # Runs a set of commands using the runners shell
     - name: Run PHPUnit tests
