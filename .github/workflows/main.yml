@@ -18,11 +18,8 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
 
-    - name: Write custom PHP ini settings for this application
-      run: echo 'assert.exception=1' >> /etc/php/7.4/cli/conf.d/chatemon.ini
-
     - name: Output PHP version and information
-      run: php --version && php --ini
+      run: php --version
 
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
