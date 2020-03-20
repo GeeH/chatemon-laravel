@@ -31,6 +31,5 @@ jobs:
     - name: Install JS dependencies
       run: npm ci
 
-    # Runs a set of commands using the runners shell
-    - name: Run PHPUnit tests
-      run: make test
+    - name: Deploy to AWS infrastructure
+      run: make deploy
