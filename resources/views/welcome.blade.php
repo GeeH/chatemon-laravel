@@ -10,5 +10,5 @@
 <body>
     <div id="index"></div>
 </body>
-<script type="text/javascript" src="js/app.js"></script>
+<script type="text/javascript" src="https://chatemon-static-assets.s3.eu-west-1.amazonaws.com/js/app.js"></script>
 </html>

@@ -11,6 +11,10 @@ provider:
 plugins:
   - ./vendor/bref/bref
 
+package:
+  exclude:
+    - "node_modules/**"
+
 functions:
   website:
     handler: public/index.php
@@ -20,9 +24,34 @@ functions:
     events:
       -   http: 'ANY /'
       -   http: 'ANY /{proxy+}'
+
   artisan:
     handler: artisan
     timeout: 120 # in seconds
     layers:
       - ${bref:layer.php-74} # PHP
       - ${bref:layer.console} # The "console" layer
+
+resources:
+  Resources:
+    # The S3 bucket that stores the assets
+    Assets:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: chatemon-static-assets
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders: ["*"]
+              AllowedMethods: [GET]
+              AllowedOrigins: ["*"]
+    # The policy that makes the bucket publicly readable
+    AssetsBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref Assets # References the bucket we defined above
+        PolicyDocument:
+          Statement:
+            -   Effect: Allow
+                Principal: '*' # everyone
+                Action: 's3:GetObject' # to read
+                Resource: 'arn:aws:s3:::chatemon-static-assets/*' # things in the bucket

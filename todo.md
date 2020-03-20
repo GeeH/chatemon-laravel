@@ -22,4 +22,16 @@
  
  
  
- 
+  - Deployment Stuff
+   - Add assets folder as a config/env value
+   - Automate deployments from scratch
+   - PHP
+     - Checkout blank version of branch
+     - Composer install
+     - sls deploy
+   - Static
+    - Checkout blank version of branch
+    - npm install
+    - npm build (or whatever correct command is)
+    - aws s3 sync command
+   - Run e2e test?

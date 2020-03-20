@@ -14,7 +14,7 @@ export default class Combat extends Component {
     componentDidMount() {
         // replace http request with getting initial state from sync
         // bind event handler to sync update event so it updates React's state
-        fetch('/token')
+        fetch('/dev/token')
             .then(response => {
                 return response.json();
             })
