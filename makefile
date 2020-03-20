@@ -8,7 +8,7 @@ static:
 
 php:
 	php artisan cache:clear
-	node_modules/serverless/bin/serverless deploy
+	node_modules/serverless/bin/serverless --config serverless.yml deploy
 
 test:
 	vendor/bin/phpunit --testdox --testsuite Chatemon
