@@ -33,3 +33,6 @@ jobs:
 
     - name: Deploy to AWS infrastructure
       run: make deploy
+
+    - name: Say something
+      run: echo 'Finished!'
