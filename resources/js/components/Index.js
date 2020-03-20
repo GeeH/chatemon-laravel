@@ -10,7 +10,7 @@ export default class Index extends Component {
                     <div className="column is-one-fifth">
                         <p><strong>Chatemon</strong> <small>by</small></p>
                         <img src="https://chatemon-static-assets.s3.eu-west-1.amazonaws.com/img/twilio-logo-red.png"
-                             alt "Twilio Logo" width="200"/>
+                             alt="Twilio Logo" width="200"/>
                     </div>
                     <div className="column is-1">
                         <i className="fas fa-3x fa-mobile-alt"/>
