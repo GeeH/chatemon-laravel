@@ -18,8 +18,11 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
 
-    - name: Output PHP version and information
+    - name: Output PHP version
       run: php --version
+
+    - name: Output AWS CLI version
+      run: aws --version
 
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
