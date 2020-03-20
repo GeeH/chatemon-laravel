@@ -4,6 +4,8 @@
 namespace Chatemon;
 
 
+use Chatemon\Exception\InvalidCombatStateException;
+
 final class CombatState
 {
     protected int $turns = 0;
@@ -17,9 +19,17 @@ final class CombatState
 
     public static function fromArray(array $data): CombatState
     {
-        assert(array_key_exists('turns', $data), 'data expects "turns" key to exist');
-        assert(array_key_exists('winner', $data), 'data expects "winner" key to exist');
-        assert($data['turns'] >= 0, 'Turns cannot be negative');
+        if (!array_key_exists('turns', $data)) {
+            throw new Exception\InvalidCombatStateException('data expects "turns" key to exist');
+        }
+
+        if (!array_key_exists('winner', $data)) {
+            throw new InvalidCombatStateException('data expects "winner" key to exist');
+        }
+
+        if ($data['turns'] < 0) {
+            throw new InvalidCombatStateException('Turns cannot be negative');
+        }
 
         return new CombatState($data['turns'], $data['winner']);
     }
@@ -57,5 +67,5 @@ final class CombatState
     {
         $this->winner = true;
     }
-    
+
 }

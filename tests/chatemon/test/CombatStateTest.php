@@ -3,6 +3,7 @@
 namespace ChatemonTest;
 
 use Chatemon\CombatState;
+use Chatemon\Exception\InvalidCombatStateException;
 use PHPUnit\Framework\TestCase;
 
 class CombatStateTest extends TestCase
@@ -22,15 +23,15 @@ class CombatStateTest extends TestCase
 
     public function testThatCombatStateErrorsWithoutTurnsKey(): void
     {
-        $this->expectError();
-        $this->expectErrorMessage('assert(): data expects "turns" key to exist');
+        self::expectException(InvalidCombatStateException::class);
+        self::expectExceptionMessage('data expects "turns" key to exist');
         CombatState::fromArray(['turn' => '']);
     }
 
     public function testThatCombatStateErrorsWithoutWinnerKey(): void
     {
-        $this->expectError();
-        $this->expectErrorMessage('assert(): data expects "winner" key to exist failed');
+        self::expectException(InvalidCombatStateException::class);
+        self::expectExceptionMessage('data expects "winner" key to exist');
         CombatState::fromArray(['turn' => '', 'turns' => 0]);
     }
 
@@ -53,8 +54,8 @@ class CombatStateTest extends TestCase
 
     public function testCombatStateErrorsWhenPassedNegativeTurns(): void
     {
-        $this->expectError();
-        $this->expectErrorMessage('assert(): Turns cannot be negative failed');
+        self::expectException(InvalidCombatStateException::class);
+        self::expectExceptionMessage('Turns cannot be negative');
         CombatState::fromArray(['turn' => 'One', 'turns' => -1, 'winner' => false]);
     }
 
