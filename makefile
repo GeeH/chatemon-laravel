@@ -1,4 +1,4 @@
-.PHONY: deploy
+.PHONY: deploy static php test
 
 static:
 	npm run production
@@ -8,7 +8,7 @@ static:
 
 php:
 	php artisan cache:clear
-	node_modules/serverless/bin/serverless --config serverless.yml deploy
+	sls deploy
 
 test:
 	vendor/bin/phpunit --testdox --testsuite Chatemon
