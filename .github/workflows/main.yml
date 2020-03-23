@@ -21,8 +21,8 @@ jobs:
     - name: Output AWS CLI version
       run: aws --version
 
-    - name: Install Serverless framework globally
-      run: npm install -g serverless
+    # Install Serverless framework globally
+    - uses: serverless/github-action@master
 
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
