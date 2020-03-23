@@ -1,4 +1,4 @@
-.PHONY: deploy static php test sniff
+.PHONY: deploy static php test sniff quality
 
 static:
 	npm run production
@@ -10,10 +10,14 @@ php:
 	php artisan cache:clear
 	serverless deploy
 
-test:
-	vendor/bin/phpunit --testdox --testsuite Chatemon
+unit:
+	@vendor/bin/phpunit --testdox --testsuite Chatemon
 
 sniff:
-	vendor/bin/phpcs --standard=PSR12 chatemon/src
+	@vendor/bin/phpcs --standard=PSR12 chatemon/src
+
+test: quality unit
+
+quality: sniff
 
 deploy: test php static
