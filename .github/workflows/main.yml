@@ -3,7 +3,7 @@ name: CI
 # ON a PUSH to the BRANCH MASTER
 on:
   push:
-    branches: [ master ]
+    branches: [ production ]
 
 # Run these JOBS
 jobs:
