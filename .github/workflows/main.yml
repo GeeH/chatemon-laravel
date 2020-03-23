@@ -31,13 +31,22 @@ jobs:
     - name: Install JS dependencies
       run: npm ci
 
-    # Run out makefile from within the repository
-    - name: Deploy to AWS infrastructure
+    - name: Run the unit tests
+      run: make test
+
+    - name: Clear Laravel's cache
+      run: php artisan cache:clear
+
+    - name: Deploy the PHP part
       uses: serverless/github-action@master
-      run: make deploy
+      with:
+        args: deploy
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    - name: Deploy the static part
+      run: make static
 
     - name: Say something
       run: echo 'Finished!'
