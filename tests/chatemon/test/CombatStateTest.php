@@ -99,7 +99,7 @@ class CombatStateTest extends TestCase
     public function testMarkWonSetsWinnerToTrue(): void
     {
         $combatStateInstance = CombatState::fresh();
-        self::assertTrue($combatStateInstance->hasWinner());
+        self::assertFalse($combatStateInstance->hasWinner());
 
         $combatStateInstance->markWon();
         self::assertTrue($combatStateInstance->hasWinner());
