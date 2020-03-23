@@ -30,8 +30,7 @@ final class Combat
         CombatState $combatState,
         Randomizer $randomizer,
         LoggerInterface $logger
-    )
-    {
+    ) {
         $this->combatantOne = $combatantOne;
         $this->combatantTwo = $combatantTwo;
         $this->combatState = $combatState;
@@ -52,8 +51,10 @@ final class Combat
             throw new CombatAlreadyWonException();
         }
 
-        if (!array_key_exists($oneMoveIndex, $this->combatantOne->moves)
-            || !array_key_exists($twoMoveIndex, $this->combatantTwo->moves)) {
+        if (
+            !array_key_exists($oneMoveIndex, $this->combatantOne->moves)
+            || !array_key_exists($twoMoveIndex, $this->combatantTwo->moves)
+        ) {
             throw new MoveDoesNotExistException();
         }
 
@@ -75,6 +76,28 @@ final class Combat
         $this->combatState->incrementTurnCount();
     }
 
+    /**
+     * @todo Make private again and test better
+     * @todo Give 100% coverage
+     */
+    public function getCombatantGoingFirst(): string
+    {
+        if ($this->combatantOne->speed > $this->combatantTwo->speed) {
+            return 'One';
+        }
+
+        if ($this->combatantTwo->speed > $this->combatantOne->speed) {
+            return 'Two';
+        }
+
+        $diceRoll = $this->randomizer->__invoke(1, 2);
+        if ($diceRoll === 1) {
+            return 'One';
+        }
+
+        return 'Two';
+    }
+
     public function attackDefender(Combatant $attacker, Combatant $defender, $moveIndex): bool
     {
         $move = $attacker->moves[$moveIndex];
@@ -86,7 +109,8 @@ final class Combat
         // roll a D100 dice
         $chanceToHit = $this->randomizer->__invoke(1, 100);
         if ($chanceToHit > $move->accuracy) {
-            $this->feedback[] = "{$attacker->name} attacked {$defender->name} with <strong>{$move->name}</strong> but they missed";
+            $this->feedback[] =
+                "{$attacker->name} attacked {$defender->name} with <strong>{$move->name}</strong> but they missed";
             // we missed, do nothing
             $this->logger->info('Missed attack');
             return false;
@@ -116,8 +140,7 @@ final class Combat
         int $attackerAttack,
         int $moveDamage,
         int $defenderDefence
-    ): int
-    {
+    ): int {
         /**
          *  ((2A/5+2)*B*C)/D)/50)+2)*X)*Y/10)*Z)/255
          * A = attacker's Level
@@ -138,28 +161,22 @@ final class Combat
                                 floor(
                                     floor(
                                         floor(
-                                            2 * $attackerLevel / 5 + 2) * $attackerAttack * $moveDamage)
-                                    / $defenderDefence) / 50) + 2) * 1 * 10) / 10) * $this->randomizer->__invoke(217, 255)) / 255);
-    }
-
-    public function getCombatantOne(): Combatant
-    {
-        return $this->combatantOne;
-    }
-
-    public function getCombatantTwo(): Combatant
-    {
-        return $this->combatantTwo;
+                                            2 * $attackerLevel / 5 + 2
+                                        ) * $attackerAttack * $moveDamage
+                                    )
+                                    / $defenderDefence
+                                ) / 50
+                            ) + 2
+                        ) * 1 * 10
+                    ) / 10
+                ) * $this->randomizer->__invoke(217, 255)
+            ) / 255
+        );
     }
 
     public function getTurns(): int
     {
         return $this->combatState->getTurns();
-    }
-
-    public function getId(): string
-    {
-        return $this->id;
     }
 
     public function isWinner(): bool
@@ -192,37 +209,29 @@ final class Combat
 
         $return['combatantOne']['moves'] = [];
         foreach ($this->getCombatantOne()->moves as $move) {
-            $return['combatantOne']['moves'][] = (array) $move;
+            $return['combatantOne']['moves'][] = (array)$move;
         }
 
         $return['combatantTwo']['moves'] = [];
         foreach ($this->getCombatantTwo()->moves as $move) {
-            $return['combatantTwo']['moves'][] = (array) $move;
+            $return['combatantTwo']['moves'][] = (array)$move;
         }
 
         return $return;
     }
 
-    /**
-     * @todo Make private again and test better
-     * @todo Give 100% coverage
-     */
-    public function getCombatantGoingFirst(): string
+    public function getCombatantOne(): Combatant
     {
-        if ($this->combatantOne->speed > $this->combatantTwo->speed) {
-            return 'One';
-        }
-
-        if ($this->combatantTwo->speed > $this->combatantOne->speed) {
-            return 'Two';
-        }
-
-        $diceRoll = $this->randomizer->__invoke(1, 2);
-        if ($diceRoll === 1) {
-            return 'One';
-        }
-
-        return 'Two';
+        return $this->combatantOne;
     }
 
+    public function getCombatantTwo(): Combatant
+    {
+        return $this->combatantTwo;
+    }
+
+    public function getId(): string
+    {
+        return $this->id;
+    }
 }

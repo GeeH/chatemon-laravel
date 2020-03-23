@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Chatemon;
 
-
 use Chatemon\Exception\InvalidCombatStateException;
 
 final class CombatState
@@ -40,16 +39,6 @@ final class CombatState
         return new CombatState(0, false);
     }
 
-    public function getTurns(): int
-    {
-        return $this->turns;
-    }
-
-    public function hasWinner(): bool
-    {
-        return $this->winner;
-    }
-
     public function incrementTurnCount(): int
     {
         $this->turns++;
@@ -64,9 +53,18 @@ final class CombatState
         ];
     }
 
+    public function getTurns(): int
+    {
+        return $this->turns;
+    }
+
+    public function hasWinner(): bool
+    {
+        return $this->winner;
+    }
+
     public function markWon(): void
     {
         $this->winner = true;
     }
-
 }

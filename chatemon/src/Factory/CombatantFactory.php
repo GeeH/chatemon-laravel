@@ -48,7 +48,7 @@ final class CombatantFactory
 
 
         $moveObjects = [];
-        foreach($data['moves'] as $moveData) {
+        foreach ($data['moves'] as $moveData) {
             $move = new Move();
             $move->name = $moveData['name'];
             $move->accuracy = $moveData['accuracy'];
