@@ -34,6 +34,7 @@
     - npm install [X]
     - npm build (or whatever correct command is) [X]
     - aws s3 sync command [X]
+    - Dont deploy on push to master, create a new branch that is used to deploy (production)
  
  MONDAY 23rd MARCH
   - FIX Github action deploys - it doesn't appear to be reading the serverless.yml file properly
