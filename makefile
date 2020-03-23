@@ -8,7 +8,7 @@ static:
 
 php:
 	php artisan cache:clear
-	sls deploy
+	serverless deploy
 
 test:
 	vendor/bin/phpunit --testdox --testsuite Chatemon
