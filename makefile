@@ -1,4 +1,4 @@
-.PHONY: deploy static php test
+.PHONY: deploy static php test sniff
 
 static:
 	npm run production
@@ -12,5 +12,8 @@ php:
 
 test:
 	vendor/bin/phpunit --testdox --testsuite Chatemon
+
+sniff:
+	vendor/bin/phpcs --standard=PSR12 chatemon/src
 
 deploy: test php static
