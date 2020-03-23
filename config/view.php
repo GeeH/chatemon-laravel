@@ -32,5 +32,5 @@ return [
         'VIEW_COMPILED_PATH',
         '/tmp/storage/framework/views'
     ),
-    
+
 ];
