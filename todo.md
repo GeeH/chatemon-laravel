@@ -36,6 +36,10 @@
     - aws s3 sync command [X]
     - Dont deploy on push to master, create a new branch that is used to deploy (production)
  
- MONDAY 23rd MARCH
+ MONDAY 23rd MARCH PRE
   - FIX Github action deploys - it doesn't appear to be reading the serverless.yml file properly
   [20-Mar-2020 15:42:59] WARNING: [pool default] child 10 said into stderr: "NOTICE: PHP message: PHP Fatal error:  Uncaught InvalidArgumentException: Please provide a valid cache path. in /var/task/vendor/laravel/framework/src/Illuminate/View/Compilers/Compiler.php:36"
+
+MONDAY 23rd MARCH POST
+ - Check out https://phpinsights.com/ and see what errors it throws on the codebase
+ 
