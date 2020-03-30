@@ -67,6 +67,8 @@ final class Combat
         // @todo Messsy - refactor
         $moveIndex = lcfirst($combatantGoingFirst . 'MoveIndex');
         if (!$this->attackDefender($attacker, $defender, $$moveIndex)) {
+            // once the attacker has attacked the defender, flip them around so that the attacker becomes the defender
+            // and vice versa
             $attacker = $this->{'combatant' . ($combatantGoingFirst === 'One' ? 'Two' : 'One')};
             $defender = $this->{'combatant' . ($combatantGoingFirst === 'One' ? 'One' : 'Two')};
             $moveIndex = ($moveIndex === 'oneMoveIndex' ? 'twoMoveIndex' : 'oneMoveIndex');
@@ -98,7 +100,7 @@ final class Combat
         return 'Two';
     }
 
-    public function attackDefender(Combatant $attacker, Combatant $defender, $moveIndex): bool
+    protected function attackDefender(Combatant $attacker, Combatant $defender, $moveIndex): bool
     {
         $move = $attacker->moves[$moveIndex];
         $this->logger->info('Attacker is ' . $attacker->name);

@@ -146,7 +146,7 @@ final class CombatTest extends TestCase
     public function testToArrayConvertsToReadableArray()
     {
         $combatArray = $this->combat->toArray();
-        $fields = ['combatantOne', 'combatantTwo', 'turns', 'id', 'winner'];
+        $fields = ['combatantOne', 'combatantTwo', 'turns', 'id', 'winner', 'feedback'];
         foreach ($fields as $field) {
             self::assertArrayHasKey($field, $combatArray);
         }

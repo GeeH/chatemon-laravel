@@ -11,7 +11,7 @@ final class CombatState
     protected int $turns = 0;
     protected bool $winner = false;
 
-    protected function __construct(int $turns = 0, bool $winner = false)
+    protected function __construct(int $turns, bool $winner)
     {
         $this->turns = $turns;
         $this->winner = $winner;

@@ -13,3 +13,4 @@ yarn-error.log
 .idea/
 .serverless/
 tests/chatemon/log/*
+infection.log
