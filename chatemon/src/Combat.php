@@ -60,19 +60,24 @@ final class Combat
 
         $combatantGoingFirst = $this->getCombatantGoingFirst();
 
+        /** @var Combatant $attacker */
         $attacker = $this->{'combatant' . $combatantGoingFirst};
         $this->logger->info($attacker->name . ' is going first');
+        /** @var Combatant $defender */
         $defender = $this->{'combatant' . ($combatantGoingFirst === 'One' ? 'Two' : 'One')};
 
         // @todo Messsy - refactor
-        $moveIndex = lcfirst($combatantGoingFirst . 'MoveIndex');
-        if (!$this->attackDefender($attacker, $defender, $$moveIndex)) {
+        $moveIndex = ($combatantGoingFirst === 'One' ? $oneMoveIndex : $twoMoveIndex);
+        if (!$this->attackDefender($attacker, $defender, $moveIndex)) {
             // once the attacker has attacked the defender, flip them around so that the attacker becomes the defender
             // and vice versa
+            /** @var Combatant $attacker */
             $attacker = $this->{'combatant' . ($combatantGoingFirst === 'One' ? 'Two' : 'One')};
+            /** @var Combatant $defender */
             $defender = $this->{'combatant' . ($combatantGoingFirst === 'One' ? 'One' : 'Two')};
-            $moveIndex = ($moveIndex === 'oneMoveIndex' ? 'twoMoveIndex' : 'oneMoveIndex');
-            $this->attackDefender($attacker, $defender, $$moveIndex);
+            $moveIndex = ($combatantGoingFirst === 'One' ? $twoMoveIndex : $oneMoveIndex);
+            $this->attackDefender($attacker, $defender, $moveIndex);
+            // THIS WAS BAD CODE - GH 30/03/2020
         }
 
         $this->combatState->incrementTurnCount();
@@ -100,7 +105,7 @@ final class Combat
         return 'Two';
     }
 
-    protected function attackDefender(Combatant $attacker, Combatant $defender, $moveIndex): bool
+    protected function attackDefender(Combatant $attacker, Combatant $defender, int $moveIndex): bool
     {
         $move = $attacker->moves[$moveIndex];
         $this->logger->info('Attacker is ' . $attacker->name);
@@ -201,23 +206,13 @@ final class Combat
     {
         $return = array_merge(
             [
-                'combatantOne' => (array)$this->getCombatantOne(),
-                'combatantTwo' => (array)$this->getCombatantTwo(),
+                'combatantOne' => $this->getCombatantOne()->toArray(),
+                'combatantTwo' => $this->getCombatantTwo()->toArray(),
                 'id' => $this->getId(),
                 'feedback' => $this->feedback,
             ],
             $this->combatState->toArray(),
         );
-
-        $return['combatantOne']['moves'] = [];
-        foreach ($this->getCombatantOne()->moves as $move) {
-            $return['combatantOne']['moves'][] = (array)$move;
-        }
-
-        $return['combatantTwo']['moves'] = [];
-        foreach ($this->getCombatantTwo()->moves as $move) {
-            $return['combatantTwo']['moves'][] = (array)$move;
-        }
 
         return $return;
     }

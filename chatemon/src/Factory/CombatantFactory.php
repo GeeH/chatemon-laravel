@@ -12,12 +12,14 @@ final class CombatantFactory
 {
     /**
      * @throws PropertyDoesNotExistException
+     * @todo SORT THIS STUFF OUT GH, IT NEEDS TO BE IN DB AND ELOQUENT?
      */
     public static function fromArray(array $data): Combatant
     {
         $combatant = new Combatant();
 
-        foreach (get_class_vars(get_class($combatant)) as $property => $value) {
+
+        foreach (array_keys($combatant->toArray()) as $property) {
             if (!array_key_exists($property, $data)) {
                 throw new PropertyDoesNotExistException('Property ' . $property . ' does not exist in data');
             }

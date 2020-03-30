@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Chatemon;
 
 use Chatemon\Exception\InvalidCombatStateException;
+use Symfony\Component\Config\Definition\Exception\InvalidTypeException;
 
 final class CombatState
 {
@@ -17,6 +18,9 @@ final class CombatState
         $this->winner = $winner;
     }
 
+    /**
+     * @psalm-param array{turns:int, winner:bool} $data
+     */
     public static function fromArray(array $data): CombatState
     {
         if (!array_key_exists('turns', $data)) {
