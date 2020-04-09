@@ -33,7 +33,8 @@ class HandleSmsController extends Controller
             // @todo Hacky nonsense, make this go away when we create bespoke opponents
             $combat->takeTurn($this->moveIndex[$moveIndex], 0);
 
-            $this->saveCombat($combat, $fromCountry, $fromNumber);
+            $this->saveCombat($combat, $fromCountry, $fromNumber, $this->moveIndex[$moveIndex]);
+
             $messageResponse->message("Thanks, You've played move {$moveIndex}");
             return (string)$messageResponse;
         } catch (CombatAlreadyWonException $e) {

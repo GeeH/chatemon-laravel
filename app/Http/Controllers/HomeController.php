@@ -12,6 +12,6 @@ class HomeController extends Controller
         if ($request->has('new')) {
             $this->startNewCombat($logger);
         }
-        return view('welcome');
+        return view('tailwind');
     }
 }

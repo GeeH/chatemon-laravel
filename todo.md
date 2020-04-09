@@ -2,23 +2,12 @@
  - Use Sync to update the web front end automatically [X]
   - Create token endpoint in Laravel [X]
   
- - Write some controller tests []
+ - Write some controller tests [X]
   - Refactor Controller abstract class to remove inline "new" call [X]
   - Write a Service Provider so that the Laravel container can create a client [X]
   - Write a test that mocks the client and request/logger and assert some stuff
   
   !!! DO WE MOVE COMBAT TO BE A DEPENDENCY OF THE CONTROLLER AND WRITE A SERVICE PROVIDER FOR IT???????? FRIDAY
- 
- - Add ability to catch Chatemon? []
- - Add type system []
- - Add multiple Chatemon to system
- 
- - Add first handler so we can play the game remotely via
-    - SMS [X]
-    - Twitch Chat []
-    - Email []
-    - WhatsApp []
-    - Anything else? []
  
   - PSR4 Autoloading deprecation notice on CI
  
@@ -44,3 +33,22 @@ MONDAY 23rd MARCH POST
  - Check out https://phpinsights.com/ and see what errors it throws on the codebase
  
 Fix broken webhook pre-push
+
+MONDAY 6th APRIL POST
+
+Got partly working React template with new tailwind styles - next time start by finishing abstracting the Combatant
+component properly!
+
+
+THURSDAY 9th APRIL POST
+
+ - Add ability to catch Chatemon? []
+ - Add type system []
+ - Add multiple Chatemon to system
+ 
+ - Add first handler so we can play the game remotely via
+    - SMS [X]
+    - Twitch Chat []
+    - Email []
+    - WhatsApp []
+    - Anything else? []
