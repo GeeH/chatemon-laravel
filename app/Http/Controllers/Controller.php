@@ -77,7 +77,11 @@ abstract class Controller extends BaseController
         );
     }
 
-    protected function saveCombat(Combat $combat, string $country = null, string $number = null): void
+    protected function saveCombat(
+        Combat $combat,
+        string $country = null,
+        string $number = null,
+        int $movePlayed = null): void
     {
         $document = $this->getCombatDocument();
         $data = $combat->toArray();
@@ -87,6 +91,9 @@ abstract class Controller extends BaseController
         }
         if ($number) {
             $data['fromNumber'] = $number;
+        }
+        if ($movePlayed !== null) {
+            $data['movePlayed'] = $movePlayed;
         }
 
         $document->update(['data' => $data]);

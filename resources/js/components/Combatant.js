@@ -2,31 +2,30 @@ import React, {Component} from 'react';
 
 export default class Combatant extends Component {
     render() {
+        let health = this.props.health;
+        if (this.props.health < 0) {
+            health = 0;
+        }
+        const healthPercent = Math.floor(health / this.props.maxHealth * 100) + '%';
+
         return (
-            <section className={'hero is-' + this.props.color}>
-                <div className="hero-body">
-                    <div className="columns">
-                        <div className="column is-1">
-                            <i className={'fas fa-3x fa-' + this.props.icon}/>
-                        </div>
-                        <div className="row columns column">
-                            <div className="column has-text-left is-9 is-clipped">
-                                <h3 className="title">
-                                    {this.props.combatant.name}
-                                </h3>
-                            </div>
-                            <div className="column has-text-right is-3">
-                                <h3 className="title">
-                                    Lv. {this.props.combatant.level}
-                                </h3>
-                            </div>
-                        </div>
+            <div>
+                <div className="flex w-full text-2xl">
+                    <div className="inline-flex w-1/2 "><h2 className="font-bold">
+                        {this.props.name}
+                    </h2>
                     </div>
-                        <progress className="progress is-large" value={this.props.combatant.health}
-                                  max={this.props.combatant.maxHealth}>
-                        </progress>
+                    <div className="inline-flex text-right w-1/2"><h2
+                        className="text-right w-full">Lv. {this.props.level}</h2></div>
                 </div>
-            </section>
+                <div className="flex w-full mt-3">
+                    <div className="shadow w-full bg-gray-700">
+                        <div
+                            className="bg-green-500 text-xs leading-none py-1 text-center text-white h-3"
+                            style={{width: healthPercent}}/>
+                    </div>
+                </div>
+            </div>
         );
     }
 }
