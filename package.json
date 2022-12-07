@@ -27,7 +27,7 @@
         "vue-template-compiler": "^2.6.11"
     },
     "dependencies": {
-        "serverless": "^1.66.0",
+        "serverless": "^3.25.1",
         "twilio-sync": "^0.12.0"
     }
 }
